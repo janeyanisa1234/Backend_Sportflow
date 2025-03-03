@@ -1,6 +1,6 @@
-//รวม API ของทุกคน ไว้สร้างเส้นทาง
 import express from 'express';
-import janeRoutes from './routesJane/test.js';  // ต้องใส่ `.js` เต็ม
+import janeRoutes from './routesJane/test.js';  // ใช้ J ตัวใหญ่
+import userRoutes from './routesJane/users.js';  // ใช้ J ตัวใหญ่
 
 const router = express.Router();
 
@@ -9,5 +9,6 @@ router.get('/', (req, res) => {
 });
 
 router.use('/jane', janeRoutes);
+router.use('/users', userRoutes);  // เพิ่ม route ของ users
 
-export default router;  
+export default router;
