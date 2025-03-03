@@ -1,6 +1,7 @@
 //รวม API ของทุกคน ไว้สร้างเส้นทาง
 import express from 'express';
-import janeRoutes from './routesJane/test.js';  // ต้องใส่ `.js` เต็ม
+import janeRoutes from './routesJane/test.js';
+import kongRoutes from './routeskong/kong.js';
 
 const router = express.Router();
 
@@ -10,4 +11,6 @@ router.get('/', (req, res) => {
 
 router.use('/jane', janeRoutes);
 
-export default router;  
+router.use('/kong', kongRoutes);
+
+export default router;
