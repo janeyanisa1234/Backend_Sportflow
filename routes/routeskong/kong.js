@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
-import dbKong from './kong.js';
+import dbKong from '../../Database/dbkong/kong.js';
 
 const router = express.Router();
 
@@ -38,7 +38,7 @@ router.post('/register', async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    res.status(201).json({ 
+    return res.status(201).json({ 
       message: 'User registered successfully',
       token,
       user: {
@@ -49,7 +49,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).json({ error: 'Server error: ' + error.message });
+    return res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
 
