@@ -1,15 +1,24 @@
 import express from 'express';
-import dotenv from 'dotenv';
-import routes from './routes/index.js';  // ต้องใส่ `.js` เต็ม
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+
+import routes from './routes/index.js'; // ต้องใส่ `.js` เต็ม
+
+
 
 dotenv.config();
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+
+
+// เพิ่ม middleware
+app.use(cors()); // เพิ่ม cors middleware
+app.use(express.json()); // เพิ่ม middleware สำหรับ parsing JSON
 app.use(routes);
+
+
 
 app.use('/api', routes);
 

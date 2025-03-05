@@ -1,13 +1,24 @@
-import DB from '../db.js';
+import DB from '../db.js';  // แก้ไขการนำเข้าให้ถูกต้อง
 
-const fetchData = () => {
-    const studentData = {
-        name: 'ญาณิศา คงหาญ',
-        student_id: '6530300783'
-    };
+async function getCashData() {
+    try {
+        const { data, error } = await DB
+            .from('cash')
+            .select('*');
 
-    console.log('Student Name:', studentData.name);
-    console.log('Student ID:', studentData.student_id);
-};
+        // ตรวจสอบว่ามีข้อผิดพลาดเกิดขึ้นหรือไม่
+        if (error) {
+            throw error;  // ถ้ามีข้อผิดพลาดจะ throw ไปที่ catch block
+        }
 
-fetchData();
+        // ถ้าไม่มีข้อผิดพลาด แสดงผลข้อมูล
+        console.log(data);  // แสดงข้อมูลที่ได้จากฐานข้อมูล
+    } catch (error) {
+        // จัดการกับข้อผิดพลาดที่เกิดขึ้น
+        console.error('Error fetching cash data:', error.message);
+    }
+}
+
+//test
+
+getCashData();
