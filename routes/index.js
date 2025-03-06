@@ -1,6 +1,11 @@
 //รวม API ของทุกคน ไว้สร้างเส้นทาง
 import express from 'express';
-import janeRoutes from './routesJane/test.js';  // ต้องใส่ `.js` เต็ม
+import historyRoutes from './routespalmmy/booking_history.js';
+import edit from './routespalmmy/routesedit.js';
+import cancleBook from './routespalmmy/cancleroutes.js';
+import booking from './routesmild/Booking.js';
+
+
 
 const router = express.Router();
 
@@ -8,6 +13,12 @@ router.get('/', (req, res) => {
     res.send('Hello express');
 });
 
-router.use('/jane', janeRoutes);
+router.use('/history', historyRoutes);
+router.use('/edit', edit);
+router.use('/cancleBooking', cancleBook);
+router.use('/booking', booking);
+
+
+
 
 export default router;  
