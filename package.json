@@ -8,16 +8,19 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-
     "@supabase/supabase-js": "^2.49.1",
+    "axios": "^1.8.1",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "fs-extra": "^11.3.0",
     "jsonwebtoken": "^9.0.2",
+    "muller": "^1.1.0",
+    "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
-    "multer": "^1.4.5-lts.1"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
@@ -34,5 +37,4 @@
     "url": "https://github.com/janeyanisa1234/Backend_Sportflow/issues"
   },
   "homepage": "https://github.com/janeyanisa1234/Backend_Sportflow#readme"
-
 }
