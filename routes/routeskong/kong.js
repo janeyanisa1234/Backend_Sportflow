@@ -297,5 +297,16 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+// Add a protected admin route to verify admin access
+router.get('/admin/dashboard', authenticateToken, authorizeAdmin, (req, res) => {
+  res.json({ message: 'Admin dashboard access granted', adminId: req.user.userId });
+});
 
+// Admin authorization middleware
+function authorizeAdmin(req, res, next) {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+  }
+  next();
+}
 export default router;
