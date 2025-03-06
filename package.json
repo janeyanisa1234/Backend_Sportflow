@@ -8,13 +8,32 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.48.1",
+
+
+    "@supabase/supabase-js": "^2.49.1",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.0",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
-  }
+  },
+  "description": "��#\u0000 \u0000B\u0000a\u0000c\u0000k\u0000e\u0000n\u0000d\u0000_\u0000S\u0000p\u0000o\u0000r\u0000t\u0000f\u0000l\u0000o\u0000w\u0000\r\u0000 \u0000",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janeyanisa1234/Backend_Sportflow.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/janeyanisa1234/Backend_Sportflow/issues"
+  },
+  "homepage": "https://github.com/janeyanisa1234/Backend_Sportflow#readme"
+
 }
