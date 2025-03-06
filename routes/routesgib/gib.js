@@ -17,8 +17,8 @@ router.get("/promotions", async (req, res) => {
     const promotions = await getAllPromotions();
     res.json(promotions);
   } catch (error) {
-    console.error("Error fetching promotions:", error);
-    res.status(500).json({ error: "Failed to fetch promotions" });
+    console.error("Error fetching promotions in route:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -56,6 +56,8 @@ router.get("/promotions/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch promotion details: " + error.message });
   }
 });
+
+
 
 // เพิ่มโปรโมชั่นใหม่
 router.post("/promotions", async (req, res) => {
@@ -120,11 +122,12 @@ router.delete("/promotions/:id", async (req, res) => {
 // ดึงข้อมูลกีฬา
 router.get("/sports", async (req, res) => {
   try {
-    const sports = await getAllSports();
+    const stadiumId = req.query.stadiumId; // รับ stadiumId จาก query parameter
+    const sports = await getAllSports(stadiumId);
     res.json(sports);
   } catch (error) {
-    console.error("Error fetching sports:", error);
-    res.status(500).json({ error: "Failed to fetch sports" });
+    console.error("Error fetching sports in route:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -134,8 +137,8 @@ router.get("/stadiums", async (req, res) => {
     const stadiums = await getAllStadiums();
     res.json(stadiums);
   } catch (error) {
-    console.error("Error fetching stadiums:", error);
-    res.status(500).json({ error: "Failed to fetch stadiums" });
+    console.error("Error fetching stadiums in route:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
