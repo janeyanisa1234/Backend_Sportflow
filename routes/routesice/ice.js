@@ -1,4 +1,5 @@
 import express from 'express';
+import DB from '../../Database/db.js';
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ router.get('/', (req, res) => {
   app.use(cors());
   app.use(express.json());
   
-  // 📌 ดึงข้อมูลผู้ใช้
+ 
   app.get("/api/edit", async (req, res) => {
     try {
       const { data, error } = await supabase.from("users").select("*");
@@ -27,7 +28,7 @@ router.get('/', (req, res) => {
     }
   });
   
-  // 📌 อัปเดตข้อมูลผู้ใช้
+
   app.put("/api/edit/:id", async (req, res) => {
     try {
       const { id } = req.params;
