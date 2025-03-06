@@ -2,64 +2,46 @@ import DB from "../db.js";
 
 export async function getAllPromotions() {
   console.log("Fetching all promotions...");
-  const { data, error } = await DB.from("sports_promotions").select("*");
-  if (error) throw error;
-  return data;
-}
-
-export async function addPromotion(promotion) {
   const supabase = await DB;
-  const {
-    promotion_name,
-    start_date,
-    start_time,
-    end_date,
-    end_time,
-    discount,
-    discount_limit,
-    location,
-    sports,
-  } = promotion;
 
-  console.log("Received promotion data:", promotion);
+  try {
+    const { data, error } = await supabase
+      .from("sports_promotions")
+      .select("*");
 
-  if (!promotion_name || !start_date || !start_time || !end_date || !end_time || !discount || !location || !sports || sports.length === 0) {
-    throw new Error("All required fields including sports must be provided");
-  }
-  if (new Date(`${start_date} ${start_time}`) >= new Date(`${end_date} ${end_time}`)) {
-    throw new Error("Start datetime must be before end datetime");
-  }
-  if (parseFloat(discount) < 0 || parseFloat(discount) > 100) {
-    throw new Error("Discount must be between 0 and 100");
-  }
+    if (error) {
+      console.error("Supabase error fetching promotions:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error("Failed to fetch promotions: " + error.message);
+    }
 
-  const { data, error } = await supabase
-    .from("sports_promotions")
-    .insert([
-      {
-        promotion_name,
-        start_datetime: `${start_date} ${start_time}`,
-        end_datetime: `${end_date} ${end_time}`,
-        discount_percentage: parseFloat(discount),
-        discount_limit: discount_limit ? parseInt(discount_limit) : null,
-        location,
-        promotion_status: "active",
-        sports: JSON.stringify(sports),
-      },
-    ])
-    .select();
+    if (!data || data.length === 0) {
+      console.warn("No promotions found in sports_promotions table");
+      return [];
+    }
 
-  if (error) {
-    console.error("Supabase error adding promotion:", error);
+    console.log("Fetched promotions:", data);
+    return data.map((promo) => ({
+      id: promo.id,
+      promotion_name: promo.promotion_name,
+      start_datetime: promo.start_datetime,
+      end_datetime: promo.end_datetime,
+      discount_percentage: promo.discount_percentage,
+      discount_limit: promo.discount_limit,
+      promotion_status: promo.promotion_status,
+      location: promo.location,
+      sports: promo.sports,
+      owner_id: promo.owner_id,
+    }));
+  } catch (error) {
+    console.error("Unexpected error in getAllPromotions:", error);
     throw error;
   }
-  console.log("Added promotion:", data);
-  if (!data || data.length === 0) {
-    throw new Error("No data returned after insertion");
-  }
-  return data; // คืนค่า array แทน data[0]
 }
-
 export async function updatePromotionStatus(id, status) {
   const supabase = await DB;
   console.log(`Updating promotion status for id ${id} to ${status}`);
@@ -102,45 +84,83 @@ export async function fetchData() {
   return data;
 }
 
-// ฟังก์ชันสำหรับดึงข้อมูลกีฬาและสนามจากตาราง add_fielddd
-export async function getAllSports() {
-  console.log("Fetching all sports...");
+// ดึงข้อมูลกีฬาจาก add_court โดยกรองตาม stadium_id
+export async function getAllSports(stadiumId) {
+  console.log("Fetching all sports for stadiumId:", stadiumId);
   const supabase = await DB;
-  const { data, error } = await supabase.from("add_fielddd").select("id, sport_type, field_price, stadium_name");
-  if (error) {
-    console.error("Error fetching sports:", error);
+
+  if (!stadiumId) {
+    console.error("No stadiumId provided");
+    throw new Error("stadiumId is required");
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("add_court")
+      .select("id, court_type, court_price, stadium_id");
+
+    if (error) {
+      console.error("Supabase error fetching sports:", error);
+      throw new Error("Failed to fetch sports: " + error.message);
+    }
+
+    if (!data || data.length === 0) {
+      console.warn("No sports found for stadiumId:", stadiumId);
+      return [];
+    }
+
+    console.log("Fetched sports:", data);
+    return data
+  .filter((sport) => sport.stadium_id === stadiumId)
+  .map((sport) => ({
+    id: sport.id,
+    name: sport.court_type,
+    price: sport.court_price,
+    stadiumId: sport.stadium_id,
+    image: `/pictureowner/${sport.court_type.toLowerCase().replace(/ /g, "_")}.png`,
+  }));
+  } catch (error) {
+    console.error("Unexpected error in getAllSports:", error);
     throw error;
   }
-  console.log("Fetched sports:", data);
-  return data.map((sport) => ({
-    id: sport.id,
-    name: sport.sport_type,
-    price: sport.field_price,
-    stadiumName: sport.stadium_name || "ไม่ระบุ",
-    discountPrice: sport.field_price * (1 - 0.1), // ตัวอย่างส่วนลด 10%
-    image: `/pictureowner/${sport.sport_type.toLowerCase()}.png`,
-  }));
 }
-
-// ฟังก์ชันสำหรับดึงรายการสนามที่ไม่ซ้ำจาก add_fielddd
+// ดึงข้อมูลสนามใช้เฉพาะข้อมูลจาก add_stadium
 export async function getAllStadiums() {
   console.log("Fetching all stadiums...");
   const supabase = await DB;
-  const { data, error } = await supabase
-    .from("add_fielddd")
-    .select("stadium_name", { distinct: true })
-    .not("stadium_name", "is", null); // กรองค่า null
-  if (error) {
-    console.error("Error fetching stadiums:", error.message || error);
-    throw new Error("Failed to fetch stadiums: " + (error.message || "Unknown error"));
-  }
-  console.log("Fetched stadiums:", data);
-  return data.map((item) => ({
-    id: item.stadium_name || crypto.randomUUID(), // ใช้ randomUUID ถ้า stadium_name null
-    name: item.stadium_name || "ไม่ระบุ",
-  }));
-}
 
+  try {
+    const { data, error } = await supabase
+      .from("add_stadium")
+      .select("id, owner_id, stadium_name") // เปลี่ยน user_id เป็น owner_id
+      .not("stadium_name", "is", null);
+
+    if (error) {
+      console.error("Supabase error fetching stadiums:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error("Failed to fetch stadiums: " + error.message);
+    }
+
+    if (!data || data.length === 0) {
+      console.warn("No stadiums found in add_stadium table");
+      return [];
+    }
+
+    console.log("Fetched stadiums:", data);
+    return data.map((item) => ({
+      id: item.id,
+      owner_id: item.owner_id, // ใช้ owner_id
+      name: item.stadium_name || "ไม่ระบุ",
+    }));
+  } catch (error) {
+    console.error("Unexpected error in getAllStadiums:", error);
+    throw error;
+  }
+}
 export async function updatePromotion(id, updates) {
   const supabase = await DB;
   const { data, error } = await supabase
@@ -154,4 +174,83 @@ export async function updatePromotion(id, updates) {
   }
   if (data.length === 0) return null;
   return data;
+}
+
+//บันทึกโปรโมชั่นโดยใช้ owner_id จาก add_stadium และสนามที่เลือก
+export async function addPromotion(promotion) {
+  const supabase = await DB;
+  const {
+    promotion_name,
+    start_date,
+    start_time,
+    end_date,
+    end_time,
+    discount,
+    discount_limit,
+    location,
+    sports,
+    owner_id,
+  } = promotion;
+
+  if (!promotion_name || !start_date || !start_time || !end_date || !end_time || !discount || !location || !sports || !owner_id) {
+    throw new Error("All required fields including owner_id and location must be provided");
+  }
+
+  if (!end_time) {
+    throw new Error("end_time is required");
+  }
+
+  const validSports = Array.isArray(sports) && sports.length > 0 ? sports : [];
+  const sportsJson = JSON.stringify(validSports.map(sport => ({
+    name: sport.name || "",
+    price: sport.price || 0,
+    discountPrice: sport.discountPrice || 0,
+  })));
+
+  console.log("Promotion data to insert:", {
+    promotion_name,
+    start_datetime: `${start_date} ${start_time}`,
+    end_datetime: `${end_date} ${end_time}`,
+    discount_percentage: parseFloat(discount),
+    discount_limit: discount_limit ? parseInt(discount_limit) : null,
+    location,
+    promotion_status: "active",
+    sports: sportsJson,
+    owner_id,
+  });
+
+  try {
+    const { data, error } = await supabase
+      .from("sports_promotions")
+      .insert([
+        {
+          promotion_name,
+          start_datetime: `${start_date} ${start_time}`,
+          end_datetime: `${end_date} ${end_time}`,
+          discount_percentage: parseFloat(discount),
+          discount_limit: discount_limit ? parseInt(discount_limit) : null,
+          location,
+          promotion_status: "active",
+          sports: sportsJson,
+          owner_id,
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error("Supabase error adding promotion:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw error;
+    }
+
+    console.log("Added promotion:", data);
+    return data;
+  } catch (error) {
+    console.error("Unexpected error in addPromotion:", error);
+    throw error;
+  }
 }
