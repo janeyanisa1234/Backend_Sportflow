@@ -1,5 +1,17 @@
 import DB from '../db.js';  // เชื่อมต่อกับฐานข้อมูล Supabase หรือฐานข้อมูลที่ใช้
 
+// ฟังก์ชั่นเพื่อแปลงวันที่เป็นชื่อเดือนและปี พ.ศ.
+const getThaiDateString = (date) => {
+    const months = [
+        'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+        'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+
+    const year = date.getFullYear() + 543;  // แปลงปี ค.ศ. เป็น พ.ศ.
+    const month = months[date.getMonth()];  // ดึงชื่อเดือนจาก array
+    return `${month} ${year}`;  // ผลลัพธ์ เช่น "มีนาคม 2568"
+};
+
 // ฟังก์ชั่นเพื่อหาวันสุดท้ายของเดือนที่ผ่านมา
 const getLastDayOfPreviousMonth = () => {
     const today = new Date();
@@ -7,10 +19,16 @@ const getLastDayOfPreviousMonth = () => {
     return lastDay;
 };
 
+// ฟังก์ชั่นเพื่อหาวันที่ 1 ของเดือนที่ผ่านมา
+const getFirstDayOfPreviousMonth = () => {
+    const lastDay = getLastDayOfPreviousMonth();
+    return new Date(lastDay.getFullYear(), lastDay.getMonth(), 1); // วันที่ 1 ของเดือนที่ผ่านมา
+};
+
 // ฟังก์ชั่นในการดึงยอดรวมสำหรับแต่ละสนามในเดือนที่ผ่านมา
 export const generateMonthlyCash = async () => {
     const lastDayOfPreviousMonth = getLastDayOfPreviousMonth();
-    const firstDayOfPreviousMonth = new Date(lastDayOfPreviousMonth.getFullYear(), lastDayOfPreviousMonth.getMonth(), 1); // วันที่ 1 ของเดือนที่ผ่านมา
+    const firstDayOfPreviousMonth = getFirstDayOfPreviousMonth(); // วันที่ 1 ของเดือนที่ผ่านมา
 
     try {
         // ขั้นตอนที่ 1: ดึงข้อมูลจากตาราง Booking โดยกรองเฉพาะ status_booking = "ยืนยัน"
@@ -55,15 +73,20 @@ export const generateMonthlyCash = async () => {
             const id_owner = stadiumOwners[id_stadium];
 
             if (id_owner) {
+                // สร้างชื่อเดือนและปี พ.ศ.
+                const monthYearString = getThaiDateString(lastDayOfPreviousMonth);
+                const lastDayString = `${lastDayOfPreviousMonth.getDate()} ${monthYearString} `;
+
                 // ใส่ข้อมูลลงในตาราง cashBooking
                 const { error: insertError } = await DB
-                    .from('cashBooking')
+                    .from('cashbooking')
                     .insert([{
                         id_owner,
                         id_stadium,
-                        Totalcash: totalCash,
-                        statusCash: 'รอโอน', // สถานะเริ่มต้นคือ 'รอโอน'
-                        date: lastDayOfPreviousMonth.toISOString(),  // วันที่คือวันสุดท้ายของเดือนที่ผ่านมา
+                        totalcash: totalCash,  // แก้ไขชื่อคอลัมน์เป็น Totalcash (ตามโครงสร้างตาราง)
+                        statuscash: 'รอโอน', // สถานะเริ่มต้นคือ 'รอโอน'
+                        date: lastDayString  // ใช้ชื่อเดือนและปี พ.ศ.
+                         // เพิ่มคำอธิบายวันสุดท้ายของเดือน
                     }]);
 
                 if (insertError) {
