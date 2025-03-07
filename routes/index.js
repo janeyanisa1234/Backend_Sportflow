@@ -1,6 +1,6 @@
 import express from 'express';
-import janeRoutes from './routesJane/test.js';  // ใช้ J ตัวใหญ่
-import userRoutes from './routesJane/users.js';  // ใช้ J ตัวใหญ่
+import MildRoutes from './routesmild/routesmild.js'; 
+import Plammy from './routespalmmy/palmmy.js'; 
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ router.get('/', (req, res) => {
     res.send('Hello express');
 });
 
-router.use('/jane', janeRoutes);
-router.use('/users', userRoutes);  // เพิ่ม route ของ users
+router.use('/Mild', MildRoutes);
+router.use('/Plam', Plammy);
 
 export default router;
