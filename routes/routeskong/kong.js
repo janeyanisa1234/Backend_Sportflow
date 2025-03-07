@@ -84,8 +84,7 @@ router.post('/register-owner', async (req, res) => {
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
-
-// Login endpoint with owner check
+// Login endpoint with owner and admin check
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -112,12 +111,17 @@ router.post('/login', async (req, res) => {
     const { data: ownerData } = await dbKong.findOwnerByUserId(user.id);
     const isOwner = ownerData ? true : false;
 
-    // Create JWT token with owner information
+    // Check if user is an admin
+    const { data: adminData } = await dbKong.findAdminByUserId(user.id);
+    const isAdmin = adminData ? true : false;
+
+    // Create JWT token with role information
     const token = jwt.sign(
       { 
         userId: user.id, 
         email: user.email,
-        isOwner: isOwner 
+        isOwner: isOwner,
+        isAdmin: isAdmin
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -130,7 +134,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        isOwner: isOwner
+        isOwner: isOwner,
+        isAdmin: isAdmin
       }
     });
   } catch (error) {
@@ -292,5 +297,16 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+// Add a protected admin route to verify admin access
+router.get('/admin/dashboard', authenticateToken, authorizeAdmin, (req, res) => {
+  res.json({ message: 'Admin dashboard access granted', adminId: req.user.userId });
+});
 
+// Admin authorization middleware
+function authorizeAdmin(req, res, next) {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+  }
+  next();
+}
 export default router;
