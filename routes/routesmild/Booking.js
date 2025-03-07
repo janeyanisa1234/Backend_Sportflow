@@ -1,16 +1,18 @@
 import express from 'express';
-import { getStadium } from '../../Database/dbmild/Booking.js';
+import { getStadiumsWithCourtsAndTimes } from  "../../Database/dbmild/Booking.js"; 
+
 
 const router = express.Router();
 
-// ✅ ดึงข้อมูลจากตาราง Booking (สนามกีฬา)
-router.get('/stadium', async (req, res) => {
+// ✅ ดึงข้อมูลสนามกีฬา + ประเภทสนามกีฬา + เวลาเปิด-ปิด
+router.get('/stadiums', async (req, res) => {
   try {
-    const stadiums = await getStadium();
-    res.json(stadiums);
+    const stadiumData = await getStadiumsWithCourtsAndTimes();
+    res.json(stadiumData);
   } catch (error) {
     console.error('Error fetching stadiums:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 export default router;
