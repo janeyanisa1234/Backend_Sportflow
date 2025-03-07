@@ -147,7 +147,6 @@ export const findAdminByUserId = async (userId) => {
   
   return { data, error };
 };
-
 // Update the default export to include the new function
 export default {
   findUserByEmail,
