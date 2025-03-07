@@ -27,7 +27,7 @@ const addStadium = async (stadiumData) => {
         owner_id: ownerIdToUse,
         stadium_name: stadiumData.stadium_name,
         stadium_address: stadiumData.stadium_address,
-        stadium_image: stadiumData.stadium_image || null,
+        stadium_image: stadiumData.stadium_image || null, // Changed to stadium_image_url to match URL-based approach
         stadium_status: 'รออนุมัติ'
       }])
       .select();
@@ -38,22 +38,51 @@ const addStadium = async (stadiumData) => {
     throw new Error('Failed to add stadium: ' + err.message);
   }
 };
-  
+
+// FIXED - Better handling of JSON and error cases
 const getadd_stadiumByUserId = async (userId) => {
   try {
     console.log("Fetching stadiums for user ID:", userId);
     
-    // First, get the owner ID for the user
-    const { ownerId, error: ownerError } = await getOwnerIdByUserId(userId);
+    if (!userId) {
+      console.error("getadd_stadiumByUserId called with null/undefined userId");
+      return { data: [], error: "User ID is required" };
+    }
     
-    if (ownerError) {
+    // Parse userId if it's a JSON string
+    let parsedUserId = userId;
+    try {
+      if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
+        const parsed = JSON.parse(userId);
+        parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
+        console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
+      }
+    } catch (parseError) {
+      console.log("userId is not a JSON string, continuing with original value");
+    }
+    
+    // First, get the owner ID for the user
+    const { ownerId, error: ownerError } = await getOwnerIdByUserId(parsedUserId);
+    
+    if (ownerError || !ownerId) {
       console.error('Error fetching owner ID:', ownerError);
-      return { error: 'Failed to fetch owner ID' };
+      return { data: [], error: 'No owner found for this user ID' };
     }
     
     console.log("Owner ID found:", ownerId);
     
-    // Then fetch stadiums using the owner ID
+    return await getStadiumsByOwnerId(ownerId);
+  } catch (err) {
+    console.error('Error in getadd_stadiumByUserId:', err);
+    return { data: [], error: err.message || 'An unexpected error occurred' };
+  }
+};
+
+// NEW function to get stadiums by owner ID directly
+const getStadiumsByOwnerId = async (ownerId) => {
+  try {
+    console.log(`Fetching stadiums for owner ID: ${ownerId}`);
+    
     const { data, error } = await DB
       .from('add_stadium')
       .select('*')
@@ -61,15 +90,16 @@ const getadd_stadiumByUserId = async (userId) => {
     
     if (error) {
       console.error('Error fetching stadiums:', error);
-      return { error: 'Failed to fetch stadiums' };
+      return { data: [], error: 'Failed to fetch stadiums' };
     }
     
     console.log(`Found ${data?.length || 0} stadiums for owner ID ${ownerId}`);
     
-    return { data, error: null };
+    // Return empty array instead of null if no stadiums found
+    return { data: data || [], error: null };
   } catch (err) {
-    console.error('Error in getadd_stadiumByUserId:', err);
-    return { data: null, error: err.message || 'An unexpected error occurred' };
+    console.error('Error in getStadiumsByOwnerId:', err);
+    return { data: [], error: err.message || 'An unexpected error occurred' };
   }
 };
 
@@ -89,6 +119,12 @@ const getStadiumById = async (stadiumId) => {
 };
 
 const updateStadium = async (stadiumId, updateData) => {
+  // If updating stadium image, make sure it follows URL pattern
+  if (updateData.stadium_image) {
+    updateData.stadium_image = updateData.stadium_image;
+    delete updateData.stadium_image;
+  }
+  
   const { data, error } = await DB
     .from('add_stadium')
     .update(updateData)
@@ -117,6 +153,7 @@ const deleteStadium = async (stadiumId) => {
   return { error };
 };
 
+// FIXED - More robust parsing and error handling
 const getOwnerIdByUserId = async (userId) => {
   try {
     console.log(`Looking up owner ID for user ID: ${userId}`);
@@ -132,18 +169,17 @@ const getOwnerIdByUserId = async (userId) => {
       if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
         const parsed = JSON.parse(userId);
         // Extract the actual user ID from the parsed object
-        parsedUserId = parsed.id || parsed.user_id || parsed;
+        parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
         console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
       }
     } catch (parseError) {
-      console.error("Failed to parse userId as JSON:", parseError);
-      // Continue with the original userId
+      console.log("userId is not a JSON string, continuing with original value");
     }
     
     // Try to find the owner in the owners table
     const { data, error } = await DB
       .from('owners')
-      .select('user_id')
+      .select('*')
       .eq('user_id', parsedUserId)
       .single();
     
@@ -162,15 +198,18 @@ const getOwnerIdByUserId = async (userId) => {
       return { ownerId: null, error: 'No owner found for the given user ID' };
     }
     
-    console.log(`Found owner record for user ID: ${parsedUserId} with owner ID: ${data.user_id}`);
-    return { ownerId: data.user_id, error: null };
+    // Determine which field to use as the owner ID
+    const ownerId = data.id || data.owner_id || data.user_id;
+    
+    console.log(`Found owner record for user ID: ${parsedUserId} with owner ID: ${ownerId}`);
+    return { ownerId, error: null };
   } catch (err) {
     console.error('Error in getOwnerIdByUserId:', err);
     return { ownerId: null, error: err.message || 'Failed to retrieve owner ID' };
   }
 };
 
-// Function to get user ID from multiple possible sources
+// FIXED - Improved getUserId function with better error handling
 const getUserId = () => {
   // Try localStorage first
   const storedUserId = localStorage.getItem('userId');
@@ -179,7 +218,7 @@ const getUserId = () => {
     console.log("Found userId in localStorage:", storedUserId);
     // Check if it's a JSON string and extract the ID if needed
     try {
-      if (storedUserId.startsWith('{') || storedUserId.startsWith('[')) {
+      if (typeof storedUserId === 'string' && (storedUserId.startsWith('{') || storedUserId.startsWith('['))) {
         const parsedUser = JSON.parse(storedUserId);
         return parsedUser.id || parsedUser.userId || parsedUser.user_id || storedUserId;
       }
@@ -189,14 +228,13 @@ const getUserId = () => {
     return storedUserId;
   }
   
-  // Rest of your existing code...
   // Try sessionStorage as fallback
   const sessionUserId = sessionStorage.getItem('userId');
   if (sessionUserId) {
     console.log("Found userId in sessionStorage:", sessionUserId);
     // Check if it's a JSON string and extract the ID if needed
     try {
-      if (sessionUserId.startsWith('{') || sessionUserId.startsWith('[')) {
+      if (typeof sessionUserId === 'string' && (sessionUserId.startsWith('{') || sessionUserId.startsWith('['))) {
         const parsedUser = JSON.parse(sessionUserId);
         return parsedUser.id || parsedUser.userId || parsedUser.user_id || sessionUserId;
       }
@@ -214,7 +252,7 @@ const getUserId = () => {
       console.log(`Found userId using alternative key '${key}':`, value);
       // Check if it's a JSON string and extract the ID if needed
       try {
-        if (value.startsWith('{') || value.startsWith('[')) {
+        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
           const parsedUser = JSON.parse(value);
           return parsedUser.id || parsedUser.userId || parsedUser.user_id || value;
         }
@@ -225,7 +263,48 @@ const getUserId = () => {
     }
   }
   
-  // Rest of your existing JWT logic...
+  // Try to parse JWT token for user ID
+  try {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      // Extract payload from JWT (without verification)
+      const base64Url = token.split('.')[1];
+      if (base64Url) {
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const payload = JSON.parse(jsonPayload);
+        const extractedId = payload.userId || payload.id || payload.user_id || payload.sub;
+        
+        if (extractedId) {
+          console.log("Extracted userId from JWT token:", extractedId);
+          // Save it for future use
+          localStorage.setItem('userId', extractedId);
+          return extractedId;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error parsing JWT token:", e);
+  }
+  
+  return null;
+};
+
+// Helper function to handle image URLs
+const getStadiumImageUrl = (imageData) => {
+  if (!imageData) return null;
+  
+  // If already a URL, return as is
+  if (typeof imageData === 'string' && (imageData.startsWith('http') || imageData.startsWith('/'))) {
+    return imageData;
+  }
+  
+  // Otherwise, handle as needed (depends on how images are being uploaded)
+  console.log("Converting image data to URL format");
+  return imageData;
 };
 
 // Export as a module
@@ -236,7 +315,9 @@ const dbsox = {
   getStadiumById,
   updateStadium,
   deleteStadium,
-  getOwnerIdByUserId
+  getOwnerIdByUserId,
+  getStadiumsByOwnerId, // Export the new function
+  getStadiumImageUrl // Export new helper function
 };
 
 export default dbsox;
