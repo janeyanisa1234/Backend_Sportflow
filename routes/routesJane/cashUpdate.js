@@ -9,6 +9,7 @@ import DB from '../../Database/db.js';
 const router = express.Router();
 
 // กำหนด configuration สำหรับ multer
+//ใช้ในการอ่านไฟล์รูปภาพ
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads');
