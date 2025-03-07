@@ -1,4 +1,3 @@
-//เชื่อม database จาก supabase
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
