@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import routes from './routes/index.js'; // ต้องใส่ `.js` เต็ม
-
+import setupCronJob from './cron/monthlyCashCron.js'; // นำเข้า Cron Job
 
 
 
@@ -13,12 +13,13 @@ const app = express();
 
 
 
-
+//test
 // เพิ่ม middleware
 app.use(cors()); // เพิ่ม cors middleware
 app.use(express.json()); // เพิ่ม middleware สำหรับ parsing JSON
 app.use(routes);
-
+// เริ่ม Cron Job
+setupCronJob();
 
 
 
