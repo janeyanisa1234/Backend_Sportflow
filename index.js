@@ -6,12 +6,9 @@ import routes from './routes/index.js'; // ต้องใส่ `.js` เต็
 
 
 
-
 dotenv.config();
 
 const app = express();
-
-
 
 
 // เพิ่ม middleware
@@ -20,9 +17,6 @@ app.use(express.json()); // เพิ่ม middleware สำหรับ parsin
 app.use(routes);
 
 
-
-
-app.use('/api', routes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
