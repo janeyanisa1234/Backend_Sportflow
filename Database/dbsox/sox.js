@@ -1,6 +1,6 @@
-// sox.js
 import DB from '../db.js';
 
+// Function to add a stadium
 const addStadium = async (stadiumData) => {
   try {
     console.log("Adding stadium with data:", stadiumData);
@@ -27,10 +27,11 @@ const addStadium = async (stadiumData) => {
         owner_id: ownerIdToUse,
         stadium_name: stadiumData.stadium_name,
         stadium_address: stadiumData.stadium_address,
-        stadium_image: stadiumData.stadium_image || null, // Changed to stadium_image_url to match URL-based approach
+        stadium_image: stadiumData.stadium_image || null,
         stadium_status: 'รออนุมัติ'
       }])
       .select();
+    
     if (error) throw error;
     return { data };
   } catch (err) {
@@ -39,7 +40,7 @@ const addStadium = async (stadiumData) => {
   }
 };
 
-// FIXED - Better handling of JSON and error cases
+// Function to get stadiums by user ID
 const getadd_stadiumByUserId = async (userId) => {
   try {
     console.log("Fetching stadiums for user ID:", userId);
@@ -78,31 +79,76 @@ const getadd_stadiumByUserId = async (userId) => {
   }
 };
 
-// NEW function to get stadiums by owner ID directly
+// Updated function to get stadiums by owner ID, summing court_quantity
 const getStadiumsByOwnerId = async (ownerId) => {
   try {
     console.log(`Fetching stadiums for owner ID: ${ownerId}`);
     
-    const { data, error } = await DB
+    // Fetch stadiums for the given owner
+    const { data: stadiums, error: stadiumError } = await DB
       .from('add_stadium')
       .select('*')
       .eq('owner_id', ownerId);
     
-    if (error) {
-      console.error('Error fetching stadiums:', error);
+    if (stadiumError) {
+      console.error('Error fetching stadiums:', stadiumError);
       return { data: [], error: 'Failed to fetch stadiums' };
     }
     
-    console.log(`Found ${data?.length || 0} stadiums for owner ID ${ownerId}`);
+    console.log(`Found ${stadiums?.length || 0} stadiums for owner ID ${ownerId}`);
     
-    // Return empty array instead of null if no stadiums found
-    return { data: data || [], error: null };
+    // If no stadiums found, return empty array
+    if (!stadiums || stadiums.length === 0) {
+      return { data: [], error: null };
+    }
+
+    // Fetch courts for each stadium and sum court_quantity for each court_type
+    const stadiumIds = stadiums.map(stadium => stadium.id);
+    const { data: courts, error: courtError } = await DB
+      .from('add_court')
+      .select('stadium_id, court_type, court_quantity')
+      .in('stadium_id', stadiumIds);
+
+    if (courtError) {
+      console.error("Error fetching courts:", courtError);
+      return { data: stadiums, error: courtError }; // Return stadiums without sports types if courts fail
+    }
+
+    // Aggregate courts by stadium_id and court_type, summing court_quantity
+    const sportsTypesByStadium = courts.reduce((acc, court) => {
+      const { stadium_id, court_type, court_quantity } = court;
+      if (!acc[stadium_id]) {
+        acc[stadium_id] = {};
+      }
+      if (!acc[stadium_id][court_type]) {
+        acc[stadium_id][court_type] = 0;
+      }
+      // Sum the court_quantity instead of counting rows
+      acc[stadium_id][court_type] += parseInt(court_quantity || 0, 10);
+      return acc;
+    }, {});
+
+    // Attach sports types to each stadium
+    const enrichedStadiums = stadiums.map(stadium => {
+      const sportsTypes = sportsTypesByStadium[stadium.id] || {};
+      const sportsArray = Object.entries(sportsTypes).map(([name, count]) => ({
+        name,
+        count
+      }));
+      return {
+        ...stadium,
+        sports_types: sportsArray
+      };
+    });
+
+    return { data: enrichedStadiums, error: null };
   } catch (err) {
     console.error('Error in getStadiumsByOwnerId:', err);
     return { data: [], error: err.message || 'An unexpected error occurred' };
   }
 };
 
+// Function to get a stadium by ID
 const getStadiumById = async (stadiumId) => {
   const { data, error } = await DB
     .from('add_stadium')
@@ -118,8 +164,8 @@ const getStadiumById = async (stadiumId) => {
   return { data, error };
 };
 
+// Function to update a stadium
 const updateStadium = async (stadiumId, updateData) => {
-  // If updating stadium image, make sure it follows URL pattern
   if (updateData.stadium_image) {
     updateData.stadium_image = updateData.stadium_image;
     delete updateData.stadium_image;
@@ -139,6 +185,7 @@ const updateStadium = async (stadiumId, updateData) => {
   return { data, error };
 };
 
+// Function to delete a stadium
 const deleteStadium = async (stadiumId) => {
   const { error } = await DB
     .from('add_stadium')
@@ -153,7 +200,7 @@ const deleteStadium = async (stadiumId) => {
   return { error };
 };
 
-// FIXED - More robust parsing and error handling
+// Function to get owner ID by user ID
 const getOwnerIdByUserId = async (userId) => {
   try {
     console.log(`Looking up owner ID for user ID: ${userId}`);
@@ -163,12 +210,10 @@ const getOwnerIdByUserId = async (userId) => {
       return { ownerId: null, error: "User ID is required" };
     }
     
-    // Check if userId is a JSON string and parse it if needed
     let parsedUserId = userId;
     try {
       if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
         const parsed = JSON.parse(userId);
-        // Extract the actual user ID from the parsed object
         parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
         console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
       }
@@ -176,7 +221,6 @@ const getOwnerIdByUserId = async (userId) => {
       console.log("userId is not a JSON string, continuing with original value");
     }
     
-    // Try to find the owner in the owners table
     const { data, error } = await DB
       .from('owners')
       .select('*')
@@ -184,7 +228,7 @@ const getOwnerIdByUserId = async (userId) => {
       .single();
     
     if (error) {
-      if (error.code === 'PGRST116') { // No rows returned
+      if (error.code === 'PGRST116') {
         console.log(`No owner found for user ID: ${parsedUserId}`);
         return { ownerId: null, error: `No owner found for user ID: ${parsedUserId}` };
       }
@@ -198,7 +242,6 @@ const getOwnerIdByUserId = async (userId) => {
       return { ownerId: null, error: 'No owner found for the given user ID' };
     }
     
-    // Determine which field to use as the owner ID
     const ownerId = data.id || data.owner_id || data.user_id;
     
     console.log(`Found owner record for user ID: ${parsedUserId} with owner ID: ${ownerId}`);
@@ -209,14 +252,12 @@ const getOwnerIdByUserId = async (userId) => {
   }
 };
 
-// FIXED - Improved getUserId function with better error handling
+// Function to get user ID from local storage or token
 const getUserId = () => {
-  // Try localStorage first
   const storedUserId = localStorage.getItem('userId');
   
   if (storedUserId) {
     console.log("Found userId in localStorage:", storedUserId);
-    // Check if it's a JSON string and extract the ID if needed
     try {
       if (typeof storedUserId === 'string' && (storedUserId.startsWith('{') || storedUserId.startsWith('['))) {
         const parsedUser = JSON.parse(storedUserId);
@@ -228,11 +269,9 @@ const getUserId = () => {
     return storedUserId;
   }
   
-  // Try sessionStorage as fallback
   const sessionUserId = sessionStorage.getItem('userId');
   if (sessionUserId) {
     console.log("Found userId in sessionStorage:", sessionUserId);
-    // Check if it's a JSON string and extract the ID if needed
     try {
       if (typeof sessionUserId === 'string' && (sessionUserId.startsWith('{') || sessionUserId.startsWith('['))) {
         const parsedUser = JSON.parse(sessionUserId);
@@ -244,13 +283,11 @@ const getUserId = () => {
     return sessionUserId;
   }
   
-  // Try other possible storage keys
   const possibleKeys = ['user_id', 'id', 'user'];
   for (const key of possibleKeys) {
     const value = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (value) {
       console.log(`Found userId using alternative key '${key}':`, value);
-      // Check if it's a JSON string and extract the ID if needed
       try {
         if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
           const parsedUser = JSON.parse(value);
@@ -263,11 +300,9 @@ const getUserId = () => {
     }
   }
   
-  // Try to parse JWT token for user ID
   try {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
-      // Extract payload from JWT (without verification)
       const base64Url = token.split('.')[1];
       if (base64Url) {
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -280,7 +315,6 @@ const getUserId = () => {
         
         if (extractedId) {
           console.log("Extracted userId from JWT token:", extractedId);
-          // Save it for future use
           localStorage.setItem('userId', extractedId);
           return extractedId;
         }
@@ -297,12 +331,10 @@ const getUserId = () => {
 const getStadiumImageUrl = (imageData) => {
   if (!imageData) return null;
   
-  // If already a URL, return as is
   if (typeof imageData === 'string' && (imageData.startsWith('http') || imageData.startsWith('/'))) {
     return imageData;
   }
   
-  // Otherwise, handle as needed (depends on how images are being uploaded)
   console.log("Converting image data to URL format");
   return imageData;
 };
@@ -316,8 +348,8 @@ const dbsox = {
   updateStadium,
   deleteStadium,
   getOwnerIdByUserId,
-  getStadiumsByOwnerId, // Export the new function
-  getStadiumImageUrl // Export new helper function
+  getStadiumsByOwnerId,
+  getStadiumImageUrl
 };
 
 export default dbsox;
