@@ -99,27 +99,27 @@ router.post('/login', async (req, res) => {
     const { data: user, error: userError } = await dbKong.findUserByEmail(email);
     
     // Try to find admin in admins table
-    const { data: adminByEmail, error: adminError } = await dbKong.findAdminByEmail(email);
+    const { data: admin, error: adminError } = await dbKong.findAdminByEmail(email);
     
     // Log the results for debugging
     console.log('User lookup:', { user, userError });
-    console.log('Admin lookup:', { adminByEmail, adminError });
+    console.log('Admin lookup:', { admin, adminError });
     
     // If neither exists, return invalid credentials
-    if (!user && !adminByEmail) {
+    if (!user && !admin) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
     // Handle potential errors first
-    if (userError || adminError) {
+    if (userError && userError.code !== 'PGRST116' || adminError && adminError.code !== 'PGRST116') {
       console.error('Database error:', userError || adminError);
       return res.status(500).json({ error: 'Database error occurred' });
     }
     
     // Handle admin login
-    if (adminByEmail) {
+    if (admin) {
       // Compare admin password
-      const adminPasswordMatch = await bcrypt.compare(password, adminByEmail.password);
+      const adminPasswordMatch = await bcrypt.compare(password, admin.password);
       if (!adminPasswordMatch) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
@@ -127,8 +127,8 @@ router.post('/login', async (req, res) => {
       // Create JWT token for admin
       const token = jwt.sign(
         { 
-          userId: adminByEmail.id, 
-          email: adminByEmail.email,
+          userId: admin.id, 
+          email: admin.email,
           isOwner: false,
           isAdmin: true
         },
@@ -140,9 +140,9 @@ router.post('/login', async (req, res) => {
         message: 'Admin login successful',
         token,
         user: {
-          id: adminByEmail.id,
-          name: adminByEmail.name || adminByEmail.username || 'Admin',
-          email: adminByEmail.email,
+          id: admin.id,
+          name: admin.name || admin.username || 'Admin',
+          email: admin.email,
           isOwner: false,
           isAdmin: true
         }
