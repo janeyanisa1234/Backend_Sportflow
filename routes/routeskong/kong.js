@@ -94,13 +94,61 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
-    const { data: user, error } = await dbKong.findUserByEmail(email);
-
-    if (error || !user) {
+    // Try to find user in users table
+    const { data: user, error: userError } = await dbKong.findUserByEmail(email);
+    
+    // Try to find admin in admins table
+    const { data: admin, error: adminError } = await dbKong.findAdminByEmail(email);
+    
+    // Log the results for debugging
+    console.log('User lookup:', { user, userError });
+    console.log('Admin lookup:', { admin, adminError });
+    
+    // If neither exists, return invalid credentials
+    if (!user && !admin) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
+    
+    // Handle potential errors first
+    if (userError && userError.code !== 'PGRST116' || adminError && adminError.code !== 'PGRST116') {
+      console.error('Database error:', userError || adminError);
+      return res.status(500).json({ error: 'Database error occurred' });
+    }
+    
+    // Handle admin login
+    if (admin) {
+      // Compare admin password
+      const adminPasswordMatch = await bcrypt.compare(password, admin.password);
+      if (!adminPasswordMatch) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      
+      // Create JWT token for admin
+      const token = jwt.sign(
+        { 
+          userId: admin.id, 
+          email: admin.email,
+          isOwner: false,
+          isAdmin: true
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      return res.json({ 
+        message: 'Admin login successful',
+        token,
+        user: {
+          id: admin.id,
+          name: admin.name || admin.username || 'Admin',
+          email: admin.email,
+          isOwner: false,
+          isAdmin: true
+        }
+      });
+    }
+    
+    // Regular user login flow - we know user exists from earlier check
     // Compare password
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
@@ -111,17 +159,13 @@ router.post('/login', async (req, res) => {
     const { data: ownerData } = await dbKong.findOwnerByUserId(user.id);
     const isOwner = ownerData ? true : false;
 
-    // Check if user is an admin
-    const { data: adminData } = await dbKong.findAdminByUserId(user.id);
-    const isAdmin = adminData ? true : false;
-
     // Create JWT token with role information
     const token = jwt.sign(
       { 
         userId: user.id, 
         email: user.email,
         isOwner: isOwner,
-        isAdmin: isAdmin
+        isAdmin: false
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -135,7 +179,7 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         isOwner: isOwner,
-        isAdmin: isAdmin
+        isAdmin: false
       }
     });
   } catch (error) {

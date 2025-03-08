@@ -138,11 +138,11 @@ export const updateUserPassword = async (userId, hashedPassword) => {
   return { data, error };
 };
 // Admin operations
-export const findAdminByUserId = async (userId) => {
+export const findAdminByEmail = async (email) => {
   const { data, error } = await DB
     .from('admins')
     .select('*')
-    .eq('user_id', userId)
+    .eq('email', email)
     .single();
   
   return { data, error };
@@ -153,7 +153,7 @@ export default {
   createUser,
   findOwnerByUserId,
   createOwner,
-  findAdminByUserId,
+  findAdminByEmail,
   deleteExistingResetTokens,
   createPasswordResetToken,
   findResetToken,
