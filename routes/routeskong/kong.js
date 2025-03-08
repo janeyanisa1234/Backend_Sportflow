@@ -84,6 +84,7 @@ router.post('/register-owner', async (req, res) => {
     res.status(500).json({ error: 'Server error: ' + error.message });
   }
 });
+
 // Login endpoint with owner and admin check
 router.post('/login', async (req, res) => {
   try {

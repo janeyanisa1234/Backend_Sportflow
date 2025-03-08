@@ -137,6 +137,7 @@ export const updateUserPassword = async (userId, hashedPassword) => {
   
   return { data, error };
 };
+
 // Admin operations
 export const findAdminByEmail = async (email) => {
   const { data, error } = await DB
@@ -145,8 +146,14 @@ export const findAdminByEmail = async (email) => {
     .eq('email', email)
     .single();
   
+  if (error && error.code !== 'PGRST116') {
+    console.error('Supabase lookup error:', error);
+    throw new Error('Error checking admin existence');
+  }
+  
   return { data, error };
 };
+
 // Update the default export to include the new function
 export default {
   findUserByEmail,

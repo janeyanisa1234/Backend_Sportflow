@@ -7,9 +7,10 @@ const router = express.Router();
 router.get('/generate-cash', async (req, res) => {
     try {
         const result = await generateMonthlyCash();
-        res.status(200).json({ message: result.message });
+        res.status(200).json({ message: result.message, data: result.data || null }); // เพิ่ม data ถ้ามี
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Error in generate-cash route:', error); // Log error เพื่อ debug
+        res.status(500).json({ message: 'Failed to generate monthly cash summary', error: error.message });
     }
 });
 
