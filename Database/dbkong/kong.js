@@ -137,12 +137,23 @@ export const updateUserPassword = async (userId, hashedPassword) => {
   
   return { data, error };
 };
-
+// Admin operations
+export const findAdminByUserId = async (userId) => {
+  const { data, error } = await DB
+    .from('admins')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  return { data, error };
+};
+// Update the default export to include the new function
 export default {
   findUserByEmail,
   createUser,
   findOwnerByUserId,
   createOwner,
+  findAdminByUserId,
   deleteExistingResetTokens,
   createPasswordResetToken,
   findResetToken,

@@ -1,5 +1,5 @@
-import express from 'express'
-import { getAllStadiumRequests, updateStadiumStatus } from '../../Database/dbjane/stadium.js'
+import express from 'express';
+import { getAllStadiumRequests, updateStadiumStatus } from '../../Database/dbjane/stadium.js';
 
 const router = express.Router()
 

@@ -14,7 +14,14 @@ async function getAllStadiumRequests() {
 
         if (userError) throw userError;
 
-        const result = stadiums.map(stadium => {
+        //กรณีที่มีข้อมูลเป็นในกรณีที่ข้อมูล database บางส่วนเป็น NULL
+        const validStadiums = stadiums.filter(stadium => {
+           
+            return stadium.owner_id != null && stadium.stadium_status != null;
+        });
+
+        
+        const result = validStadiums.map(stadium => {
             const owner = users.find(user => user.id === stadium.owner_id);
             return {
                 ...stadium,
