@@ -1,13 +1,16 @@
 import DB from "../db.js";
 
-export async function getAllPromotions() {
-  console.log("Fetching all promotions...");
+export async function getAllPromotions(ownerId) {
+  console.log(`Fetching promotions for owner_id: ${ownerId || "all"}...`);
   const supabase = DB;
 
   try {
-    const { data: promotionsData, error: promotionsError } = await supabase
-      .from("sports_promotions")
-      .select("*");
+    let query = supabase.from("sports_promotions").select("*");
+    if (ownerId) {
+      query = query.eq("owner_id", ownerId);
+    }
+
+    const { data: promotionsData, error: promotionsError } = await query;
 
     if (promotionsError) {
       console.error("Supabase error fetching promotions:", promotionsError);
@@ -15,7 +18,7 @@ export async function getAllPromotions() {
     }
 
     if (!promotionsData || promotionsData.length === 0) {
-      console.warn("No promotions found in sports_promotions table");
+      console.warn(`No promotions found for owner_id: ${ownerId || "all"}`);
       return [];
     }
 
@@ -30,16 +33,10 @@ export async function getAllPromotions() {
       throw new Error("Failed to fetch stadiums: " + stadiumsError.message);
     }
 
-    if (!stadiumsData || stadiumsData.length === 0) {
-      console.warn("No stadiums found in add_stadium table");
-    }
-
     const stadiumMap = stadiumsData.reduce((acc, stadium) => {
       acc[stadium.id] = stadium.stadium_name || "ไม่ระบุ";
       return acc;
     }, {});
-
-    console.log("Stadium map:", stadiumMap);
 
     const currentDate = new Date();
 
@@ -57,22 +54,11 @@ export async function getAllPromotions() {
       }
 
       const mappedStadiumName = stadiumMap[promo.location] || "ไม่พบชื่อสนาม (ID: " + promo.location + ")";
-      console.log(`Mapping location ${promo.location} to stadium name: ${mappedStadiumName}`);
-
       const endDate = new Date(promo.end_datetime);
       const calculatedStatus = endDate > currentDate ? "กำลังดำเนินการ" : "หมดอายุแล้ว";
 
-      console.log(`Promotion ${promo.id}: Original status = ${promo.promotion_status}, Calculated status = ${calculatedStatus}`);
-
       if (promo.promotion_status !== calculatedStatus || promo.promotion_status == null) {
-        try {
-          await updatePromotionStatus(promo.id, calculatedStatus);
-          console.log(`Updated status for promotion ${promo.id} to ${calculatedStatus}`);
-        } catch (error) {
-          console.error(`Failed to update status for promotion ${promo.id}:`, error);
-        }
-      } else {
-        console.log(`No status update needed for promotion ${promo.id}`);
+        await updatePromotionStatus(promo.id, calculatedStatus);
       }
 
       return {
@@ -95,6 +81,7 @@ export async function getAllPromotions() {
     throw error;
   }
 }
+
 
 // ฟังก์ชัน getPromotionById ใน gib.js
 export async function getPromotionById(id) {
@@ -289,15 +276,17 @@ export async function getAllSports(stadiumId) {
   }
 }
 
-export async function getAllStadiums() {
-  console.log("Fetching all stadiums...");
+export async function getAllStadiums(ownerId) {
+  console.log(`Fetching stadiums for owner_id: ${ownerId}...`);
   const supabase = DB;
 
   try {
-    const { data, error } = await supabase
-      .from("add_stadium")
-      .select("id, owner_id, stadium_name")
-      .not("stadium_name", "is", null);
+    let query = supabase.from("add_stadium").select("id, owner_id, stadium_name").not("stadium_name", "is", null);
+    if (ownerId) {
+      query = query.eq("owner_id", ownerId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Supabase error fetching stadiums:", error);
@@ -305,7 +294,7 @@ export async function getAllStadiums() {
     }
 
     if (!data || data.length === 0) {
-      console.warn("No stadiums found in add_stadium table");
+      console.warn(`No stadiums found for owner_id: ${ownerId || "all"}`);
       return [];
     }
 
