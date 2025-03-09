@@ -15,6 +15,7 @@ import FieldRoutes from './routessox/field.js';
 
 import paymentQR from './routespalmmy/payment.js';
 
+import iceRoutes from './routesice/ice.js';
 
 
 
@@ -41,6 +42,7 @@ router.use('/cashUpdate', cashUpdate);
 router.use('/stadium', stadiumRoutes);
 router.use('/cash', cashRoutes);  // เพิ่มเส้นทางใหม่ที่ใช้ cash.js
 router.use('/', paymentQR);
+router.use('/ice',iceRoutes);
 
 
 
