@@ -1,6 +1,5 @@
 import DB from '../db.js';
 
-// ฟังก์ชันสำหรับเพิ่มสนามกีฬา
 const addStadium = async (stadiumData) => {
   try {
     console.log("Adding stadium with data:", stadiumData);
@@ -15,12 +14,12 @@ const addStadium = async (stadiumData) => {
       throw new Error('Owner ID is required to add a stadium');
     }
     
-    // ตรวจสอบข้อมูลที่จำเป็น
     if (!stadiumData.stadium_name || !stadiumData.stadium_address) {
       throw new Error('Stadium name and address are required');
     }
     
-    // บันทึกข้อมูลสนามลงตาราง add_stadium
+    const dateAdd = new Date().toISOString();
+
     const { data, error } = await DB
       .from('add_stadium')
       .insert([{ 
@@ -28,24 +27,93 @@ const addStadium = async (stadiumData) => {
         stadium_name: stadiumData.stadium_name,
         stadium_address: stadiumData.stadium_address,
         stadium_image: stadiumData.stadium_image || null,
-        stadium_status: 'รออนุมัติ'
+        stadium_status: 'รออนุมัติ',
+        date_add: dateAdd
       }])
       .select();
     
-    if (error) throw error;
+    if (error) {
+      console.error("Database insert error:", error);
+      throw new Error(`Failed to insert stadium: ${error.message}`);
+    }
+    
+    console.log("Stadium added successfully:", data);
     return { data };
   } catch (err) {
-    console.error("Database error:", err);
+    console.error("Error in addStadium:", err);
     throw new Error('Failed to add stadium: ' + err.message);
   }
 };
 
-// ฟังก์ชันสำหรับดึงข้อมูลสนามตาม owner_id
+const deleteStadium = async (stadiumId) => {
+  try {
+    console.log(`Deleting stadium with ID: ${stadiumId}`);
+    console.log("Stadium ID type and value:", typeof stadiumId, stadiumId);
+    
+    if (!stadiumId) {
+      throw new Error('Stadium ID is required to delete a stadium');
+    }
+    
+    const { data: existingStadium, error: fetchError } = await DB
+      .from('add_stadium')
+      .select('*')
+      .eq('id', stadiumId)
+      .single();
+    
+    if (fetchError) {
+      console.error("Error checking stadium existence:", fetchError);
+      throw new Error(`Failed to check stadium existence: ${fetchError.message}`);
+    }
+    
+    if (!existingStadium) {
+      console.error(`Stadium with ID ${stadiumId} not found in the database during existence check`);
+      throw new Error('No stadium found with the given ID');
+    }
+    
+    console.log("Found stadium before deletion:", existingStadium);
+    
+    // Delete related courts first
+    const { error: courtDeleteError } = await DB
+      .from('add_court')
+      .delete()
+      .eq('stadium_id', stadiumId);
+    
+    if (courtDeleteError) {
+      console.error("Error deleting related courts:", courtDeleteError);
+      throw new Error(`Failed to delete related courts: ${courtDeleteError.message}`);
+    }
+    
+    // Perform the stadium delete operation
+    const { data, error, count } = await DB
+      .from('add_stadium')
+      .delete()
+      .eq('id', stadiumId)
+      .select();
+    
+    console.log("Delete operation result:", { data, error, count });
+    
+    if (error) {
+      console.error("Database delete error:", error);
+      throw new Error(`Failed to delete stadium: ${error.message}`);
+    }
+    
+    if (!data || data.length === 0) {
+      console.error(`Delete operation returned no data for stadium ID ${stadiumId}`);
+      throw new Error('No stadium found with the given ID or deletion failed');
+    }
+    
+    console.log("Stadium deleted successfully:", data);
+    return { data };
+  } catch (err) {
+    console.error("Error in deleteStadium:", err);
+    throw new Error('Failed to delete stadium: ' + err.message);
+  }
+};
+
 const getStadiumsByOwnerId = async (ownerId) => {
   try {
     console.log(`Fetching stadiums for owner ID: ${ownerId}`);
     
-    // ดึงข้อมูลสนามทั้งหมดของ owner_id
     const { data: stadiums, error: stadiumError } = await DB
       .from('add_stadium')
       .select('*')
@@ -62,7 +130,6 @@ const getStadiumsByOwnerId = async (ownerId) => {
       return { data: [], error: null };
     }
 
-    // ดึงข้อมูลคอร์ทของสนามทั้งหมด
     const stadiumIds = stadiums.map(stadium => stadium.id);
     const { data: courts, error: courtError } = await DB
       .from('add_court')
@@ -74,7 +141,6 @@ const getStadiumsByOwnerId = async (ownerId) => {
       return { data: stadiums, error: courtError };
     }
 
-    // รวมจำนวนคอร์ทตามประเภทกีฬา
     const sportsTypesByStadium = courts.reduce((acc, court) => {
       const { stadium_id, court_type, court_quantity } = court;
       if (!acc[stadium_id]) {
@@ -87,7 +153,6 @@ const getStadiumsByOwnerId = async (ownerId) => {
       return acc;
     }, {});
 
-    // แนบข้อมูลประเภทกีฬาเข้ากับสนาม
     const enrichedStadiums = stadiums.map(stadium => {
       const sportsTypes = sportsTypesByStadium[stadium.id] || {};
       const sportsArray = Object.entries(sportsTypes).map(([name, count]) => ({
@@ -107,7 +172,6 @@ const getStadiumsByOwnerId = async (ownerId) => {
   }
 };
 
-// ฟังก์ชันสำหรับดึง owner_id จาก user_id
 const getOwnerIdByUserId = async (userId) => {
   try {
     console.log(`Looking up owner ID for user ID: ${userId}`);
@@ -128,7 +192,6 @@ const getOwnerIdByUserId = async (userId) => {
       console.log("userId is not a JSON string, continuing with original value");
     }
     
-    // ค้นหา owner_id จากตาราง owners
     const { data, error } = await DB
       .from('owners')
       .select('*')
@@ -160,9 +223,9 @@ const getOwnerIdByUserId = async (userId) => {
   }
 };
 
-// ส่งออกโมดูล
 const dbsox = {
   addStadium,
+  deleteStadium,
   getOwnerIdByUserId,
   getStadiumsByOwnerId
 };
