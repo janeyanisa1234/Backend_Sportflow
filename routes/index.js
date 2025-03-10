@@ -14,6 +14,7 @@ import soxRoutes from './routessox/sox.js';
 import FieldRoutes from './routessox/field.js';
 
 import paymentQR from './routespalmmy/payment.js';
+import pingRoutes from './routesping/ping.js';
 
 import iceRoutes from './routesice/ice.js';
 
@@ -44,6 +45,7 @@ router.use('/cash', cashRoutes);  // เพิ่มเส้นทางให�
 router.use('/', paymentQR);
 router.use('/ice',iceRoutes);
 
+router.use('/ping', pingRoutes);
 
 
 export default router;
