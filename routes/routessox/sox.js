@@ -9,7 +9,7 @@ import DB from '../../Database/db.js';
 
 const router = express.Router();
 
-// Configure multer for file uploads
+// ตั้งค่า Multer สำหรับการอัปโหลดไฟล์
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads');
@@ -26,12 +26,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Test route
+// เส้นทางทดสอบ
 router.get('/', (req, res) => {
-  res.send("test test");
+  res.send("test test"); // ส่งข้อความทดสอบเพื่อเช็คว่า Router ทำงาน
 });
 
-// Add stadium route
+// เส้นทางสำหรับเพิ่มสนามกีฬา
 router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
   try {
     const { stadium_name, stadium_address, owner_id } = req.body;
@@ -41,6 +41,7 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
       return res.status(400).json({ error: 'No stadium image uploaded' });
     }
 
+    // อัปโหลดไฟล์ไปยัง Supabase Storage
     const filePath = uploadedFile.path;
     const fileContent = fs.readFileSync(filePath);
     const fileName = `${Date.now()}_${path.basename(uploadedFile.filename)}`;
@@ -70,11 +71,12 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
       stadium_image
     });
 
-    fs.unlinkSync(filePath);
+    fs.unlinkSync(filePath); // ลบไฟล์ชั่วคราวหลังอัปโหลดสำเร็จ
 
     if (owner_id) {
       console.log("Using provided owner_id:", owner_id);
       
+      // บันทึกข้อมูลสนามลงฐานข้อมูล
       const { data, error } = await dbsox.addStadium({
         owner_id,
         stadium_name,
@@ -93,6 +95,7 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
     
     let userId = null;
     
+    // ดึง userId จาก JWT token หรือส่วนอื่นของ request
     if (req.headers.authorization) {
       try {
         const token = req.headers.authorization.split(' ')[1];
@@ -117,6 +120,7 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
     }
 
     try {
+      // ดึง owner_id จาก user_id
       const { ownerId, error: ownerError } = await dbsox.getOwnerIdByUserId(userId);
       
       if (ownerError || !ownerId) {
@@ -126,6 +130,7 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
         });
       }
       
+      // บันทึกข้อมูลสนามโดยใช้ owner_id ที่ดึงมา
       const { data, error } = await dbsox.addStadium({
         owner_id: ownerId,
         stadium_name,
@@ -156,7 +161,7 @@ router.post('/add_stadium', upload.single('slipImage'), async (req, res) => {
   }
 });
 
-// Get stadiums for a user
+// เส้นทางสำหรับดึงข้อมูลสนามของผู้ใช้
 router.get('/stadiums/:userId', async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -180,6 +185,7 @@ router.get('/stadiums/:userId', async (req, res) => {
       console.log("userId is not a JSON string, continuing with original value");
     }
     
+    // ดึง owner_id จาก user_id
     const { ownerId, error: ownerError } = await dbsox.getOwnerIdByUserId(parsedUserId);
     
     if (ownerError || !ownerId) {
@@ -192,6 +198,7 @@ router.get('/stadiums/:userId', async (req, res) => {
     
     console.log(`Found owner ID: ${ownerId} for user: ${parsedUserId}`);
     
+    // ดึงข้อมูลสนามทั้งหมดของ owner_id
     const { data, error } = await dbsox.getStadiumsByOwnerId(ownerId);
     
     if (error) {
@@ -199,7 +206,6 @@ router.get('/stadiums/:userId', async (req, res) => {
       throw error;
     }
     
-    // Debug log to confirm sports types data
     data.forEach(stadium => {
       console.log(`Stadium ${stadium.stadium_name} sports types:`, stadium.sports_types);
     });
