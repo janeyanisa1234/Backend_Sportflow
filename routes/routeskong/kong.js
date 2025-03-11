@@ -3,60 +3,57 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import fs from 'fs';
 import dbKong from '../../Database/dbkong/kong.js';
+import DB from '../../Database/db.js'; // Add this import for Supabase storage
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
-  res.send('Kong API is working');
-});
-
-// Registration endpoint
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, phone, password } = req.body;
-    
-    // Validate input
-    if (!name || !email || !phone || !password) {
-      return res.status(400).json({ error: 'All fields are required' });
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
-
-    // Check if user already exists
-    const { data: existingUser } = await dbKong.findUserByEmail(email);
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'User with this email already exists' });
-    }
-
-    // Insert user into database
-    const { data: newUser } = await dbKong.createUser({ name, email, phone, password });
-
-    // Create JWT token
-    const token = jwt.sign(
-      { userId: newUser[0].id, email: newUser[0].email },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    return res.status(201).json({ 
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: newUser[0].id,
-        name: newUser[0].name,
-        email: newUser[0].email
-      }
-    });
-  } catch (error) {
-    console.error('Server error:', error);
-    return res.status(500).json({ error: 'Server error: ' + error.message });
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with original extension
+    const uniqueFilename = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueFilename);
   }
 });
 
-// Owner registration endpoint
-router.post('/register-owner', async (req, res) => {
+// File filter to only allow images
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Owner registration endpoint with file uploads
+router.post('/register-owner', upload.fields([
+  { name: 'idCardImage', maxCount: 1 },
+  { name: 'bankBookImage', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { name, email, phone, password, identity_card, bank_name, bank_acc_id } = req.body;
+    const files = req.files;
 
     if (!name || !email || !phone || !password || !identity_card || !bank_name || !bank_acc_id) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -70,15 +67,177 @@ router.post('/register-owner', async (req, res) => {
     const { data: newUser } = await dbKong.createUser({ name, email, phone, password });
     const userId = newUser[0].id;
 
-    // Create owner
+    // Upload files to Supabase Storage
+    let identity_card_url = null;
+    let bank_acc_url = null;
+
+    // Process identity card image
+    if (files && files.idCardImage && files.idCardImage[0]) {
+      const identityCardFile = files.idCardImage[0];
+      const filePath = identityCardFile.path;
+      const fileContent = fs.readFileSync(filePath);
+      const fileName = `identity_cards/${userId}/${Date.now()}_${path.basename(identityCardFile.filename)}`;
+      
+      // Upload file to storage bucket 'identity_card'
+      const { data: uploadData, error: uploadError } = await DB.storage
+        .from('identity_card')
+        .upload(fileName, fileContent, {
+          contentType: identityCardFile.mimetype,
+          cacheControl: '3600'
+        });
+      
+      if (uploadError) {
+        console.error('Error uploading identity card to storage:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload identity card image' });
+      }
+      
+      // Get URL of the uploaded file
+      const { data: publicURL } = DB.storage
+        .from('identity_card')
+        .getPublicUrl(fileName);
+      
+      identity_card_url = publicURL.publicUrl;
+      
+      // Clean up local file
+      fs.unlinkSync(filePath);
+    }
+
+    // Process bank account image
+    if (files && files.bankBookImage && files.bankBookImage[0]) {
+      const bankAccFile = files.bankBookImage[0];
+      const filePath = bankAccFile.path;
+      const fileContent = fs.readFileSync(filePath);
+      const fileName = `bank_accounts/${userId}/${Date.now()}_${path.basename(bankAccFile.filename)}`;
+      
+      // Upload file to storage bucket 'bank_acc'
+      const { data: uploadData, error: uploadError } = await DB.storage
+        .from('bank_acc')
+        .upload(fileName, fileContent, {
+          contentType: bankAccFile.mimetype,
+          cacheControl: '3600'
+        });
+      
+      if (uploadError) {
+        console.error('Error uploading bank account to storage:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload bank account image' });
+      }
+      
+      // Get URL of the uploaded file
+      const { data: publicURL } = DB.storage
+        .from('bank_acc')
+        .getPublicUrl(fileName);
+      
+      bank_acc_url = publicURL.publicUrl;
+      
+      // Clean up local file
+      fs.unlinkSync(filePath);
+    }
+
+    // Create owner with document URLs
     await dbKong.createOwner({ 
       user_id: userId, 
       identity_card, 
       bank_name, 
-      bank_acc_id 
+      bank_acc_id,
+      identity_card_url,
+      bank_acc_url
     });
 
     res.status(201).json({ message: 'Owner registered successfully' });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'Server error: ' + error.message });
+  }
+});
+
+// Update owner documents route
+router.put('/update-owner-documents', authenticateToken, upload.fields([
+  { name: 'idCardImage', maxCount: 1 },
+  { name: 'bankBookImage', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const files = req.files;
+    
+    // Check if user is an owner
+    const { data: ownerData, error: ownerError } = await dbKong.findOwnerByUserId(userId);
+    
+    if (ownerError || !ownerData) {
+      return res.status(403).json({ error: 'Only owners can update documents' });
+    }
+    
+    const updates = {};
+    
+    // Process identity card image if provided
+    if (files && files.idCardImage && files.idCardImage[0]) {
+      const identityCardFile = files.idCardImage[0];
+      const filePath = identityCardFile.path;
+      const fileContent = fs.readFileSync(filePath);
+      const fileName = `identity_cards/${userId}/${Date.now()}_${path.basename(identityCardFile.filename)}`;
+      
+      // Upload file to storage bucket 'identity_card'
+      const { data: uploadData, error: uploadError } = await DB.storage
+        .from('identity_card')
+        .upload(fileName, fileContent, {
+          contentType: identityCardFile.mimetype,
+          cacheControl: '3600'
+        });
+      
+      if (uploadError) {
+        console.error('Error uploading identity card to storage:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload identity card image' });
+      }
+      
+      // Get URL of the uploaded file
+      const { data: publicURL } = DB.storage
+        .from('identity_card')
+        .getPublicUrl(fileName);
+      
+      updates.identity_card_url = publicURL.publicUrl;
+      
+      // Clean up local file
+      fs.unlinkSync(filePath);
+    }
+    
+    // Process bank account image if provided
+    if (files && files.bankBookImage && files.bankBookImage[0]) {
+      const bankAccFile = files.bankBookImage[0];
+      const filePath = bankAccFile.path;
+      const fileContent = fs.readFileSync(filePath);
+      const fileName = `bank_accounts/${userId}/${Date.now()}_${path.basename(bankAccFile.filename)}`;
+      
+      // Upload file to storage bucket 'bank_acc'
+      const { data: uploadData, error: uploadError } = await DB.storage
+        .from('bank_acc')
+        .upload(fileName, fileContent, {
+          contentType: bankAccFile.mimetype,
+          cacheControl: '3600'
+        });
+      
+      if (uploadError) {
+        console.error('Error uploading bank account to storage:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload bank account image' });
+      }
+      
+      // Get URL of the uploaded file
+      const { data: publicURL } = DB.storage
+        .from('bank_acc')
+        .getPublicUrl(fileName);
+      
+      updates.bank_acc_url = publicURL.publicUrl;
+      
+      // Clean up local file
+      fs.unlinkSync(filePath);
+    }
+    
+    // Only update if there are changes
+    if (Object.keys(updates).length > 0) {
+      await dbKong.updateOwnerDocuments(userId, updates);
+      return res.json({ message: 'Documents updated successfully', updates });
+    } else {
+      return res.status(400).json({ error: 'No documents provided for update' });
+    }
+    
   } catch (error) {
     console.error('Server error:', error);
     res.status(500).json({ error: 'Server error: ' + error.message });
@@ -239,7 +398,7 @@ router.post('/forgot-password', async (req, res) => {
           <h2>รีเซ็ตรหัสผ่าน</h2>
           <p>คุณได้ร้องขอการรีเซ็ตรหัสผ่าน คลิกที่ลิงก์ด้านล่างเพื่อตั้งรหัสผ่านใหม่:</p>
           <a href="${resetLink}" style="display: inline-block; padding: 10px 20px; margin: 20px 0; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">รีเซ็ตรหัสผ่าน</a>
-          <p>ลิงก์นี้จะหมดอายุในอีก 30 นาที</p>
+          <p>ลิงก์นี้จะหมดอายกก 30 นาที</p>
           <p>หากคุณไม่ได้ร้องขอการรีเซ็ตรหัสผ่าน โปรดละเลยอีเมลนี้</p>
         </div>
       `,
@@ -354,4 +513,21 @@ function authorizeAdmin(req, res, next) {
   }
   next();
 }
+
+// Middleware to handle multer errors specifically:
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    console.error('Multer error:', err);
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ 
+        error: 'Unexpected field in file upload', 
+        details: `Expected fields: identity_card_image, bank_acc_image. Got: ${err.field}` 
+      });
+    }
+    return res.status(400).json({ error: `File upload error: ${err.message}` });
+  }
+  next(err);
+};
+
+// Apply the error handler after your routes
 export default router;
