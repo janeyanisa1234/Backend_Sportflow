@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAllUsers, getRegularUsers, getOwnerUsers, deleteUser, checkUserExists, countUsers, countOwnerUsers,countRegularUsers } from '../../Database/dbjane/users.js';
+import { getAllUsers, getRegularUsers, getOwnerUsers, deleteUser, checkUserExists, countUsers, countOwnerUsers,countRegularUsers, getNewUsersToday } from '../../Database/dbjane/users.js';
 
 const router = express.Router();
 
@@ -249,7 +249,27 @@ router.get('/statistics', async (req, res) => {
     }
 });
 
-
+// ดึงข้อมูลผู้ใช้ใหม่วันนี้ (เปลี่ยนเป็น /new-users-today)
+router.get("/new-users-today", async (req, res) => {
+    try {
+      const { data, error } = await getNewUsersToday();
+  
+      if (error) {
+        return res.status(500).json({
+          success: false,
+          message: "เกิดข้อผิดพลาด: " + error,
+        });
+      }
+  
+      res.json(data);
+    } catch (error) {
+      console.error("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้ใหม่วันนี้:", error);
+      res.status(500).json({
+        success: false,
+        message: "เกิดข้อผิดพลาด: " + error.message,
+      });
+    }
+  });
 
 
 export default router;
