@@ -108,7 +108,6 @@ export const getOwnerById = async (userId) => {
   };
   
   
-  // Update the exports
   export default { 
     getUserById, 
     verifyPassword, 
