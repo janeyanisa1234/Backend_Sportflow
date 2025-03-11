@@ -91,7 +91,22 @@ export const getOwnerById = async (userId) => {
     }
   };
   
+  export const updateUserName = async (userId, newName) => {
+    try {
+      const { error } = await DB
+        .from("users")
+        .update({ name: newName })
+        .eq("id", userId);
+        
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      console.error("Database update error:", error.message);
+      return { error: error.message };
+    }
+  };
+  
+  
 
-
-export default { getUserById, verifyPassword,getOwnerById  };
+export default { getUserById, verifyPassword,getOwnerById,updateUserName  };
 
