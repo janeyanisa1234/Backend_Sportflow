@@ -1,5 +1,5 @@
 import express from "express";
-import gibRoutes from "./routesgib/gib.js";
+import gibRoutes from "./routesgib/gib.js"; // ใช้ gibRoutes ภายใต้ /api
 
 import booking from "./routesmild/Booking.js";
 import kongRoutes from "./routeskong/kong.js";
