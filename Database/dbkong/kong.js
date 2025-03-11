@@ -54,15 +54,38 @@ export const findOwnerByUserId = async (userId) => {
 };
 
 export const createOwner = async (ownerData) => {
-  const { user_id, identity_card, bank_name, bank_acc_id } = ownerData;
+  const { user_id, identity_card, bank_name, bank_acc_id, identity_card_url, bank_acc_url } = ownerData;
   
   const { data, error } = await DB
     .from('owners')
-    .insert([{ user_id, identity_card, bank_name, bank_acc_id }]);
+    .insert([{ 
+      user_id, 
+      identity_card, 
+      bank_name, 
+      bank_acc_id,
+      identity_card_url,
+      bank_acc_url
+    }]);
   
   if (error) {
     console.error('Owner creation error:', error);
     throw new Error('Failed to create owner: ' + error.message);
+  }
+  
+  return { data, error };
+};
+
+// Add new function to update owner document URLs
+export const updateOwnerDocuments = async (userId, updates) => {
+  const { data, error } = await DB
+    .from('owners')
+    .update(updates)
+    .eq('user_id', userId)
+    .select();
+  
+  if (error) {
+    console.error('Owner document update error:', error);
+    throw new Error('Failed to update owner documents: ' + error.message);
   }
   
   return { data, error };
@@ -154,17 +177,51 @@ export const findAdminByEmail = async (email) => {
   return { data, error };
 };
 
+// Supabase Storage operations
+export const uploadFileToSupabase = async (bucket, filePath, fileBuffer, contentType, options = {}) => {
+  try {
+    // Upload file to Supabase Storage
+    const { data, error } = await DB.storage
+      .from(bucket)
+      .upload(filePath, fileBuffer, {
+        contentType,
+        upsert: true,
+        ...options
+      });
+    
+    if (error) {
+      console.error(`Supabase storage upload error (${bucket}/${filePath}):`, error);
+      throw new Error(`Failed to upload file to ${bucket}: ${error.message}`);
+    }
+    
+    // Get public URL for the uploaded file
+    const { data: publicUrlData } = DB.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+    
+    return {
+      data,
+      publicUrl: publicUrlData.publicUrl
+    };
+  } catch (error) {
+    console.error('File upload error:', error);
+    throw new Error(`File upload failed: ${error.message}`);
+  }
+};
+
 // Update the default export to include the new function
 export default {
   findUserByEmail,
   createUser,
   findOwnerByUserId,
   createOwner,
+  updateOwnerDocuments,
   findAdminByEmail,
   deleteExistingResetTokens,
   createPasswordResetToken,
   findResetToken,
   deleteResetToken,
   getUserProfile,
-  updateUserPassword
+  updateUserPassword,
+  uploadFileToSupabase
 };

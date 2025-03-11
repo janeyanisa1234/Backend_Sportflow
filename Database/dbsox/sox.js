@@ -1,11 +1,9 @@
-// sox.js
 import DB from '../db.js';
 
 const addStadium = async (stadiumData) => {
   try {
     console.log("Adding stadium with data:", stadiumData);
     
-    // Get the owner ID if it's not already provided
     let ownerIdToUse = stadiumData.owner_id;
     if (!ownerIdToUse && stadiumData.user_id) {
       const { ownerId } = await getOwnerIdByUserId(stadiumData.user_id);
@@ -16,144 +14,164 @@ const addStadium = async (stadiumData) => {
       throw new Error('Owner ID is required to add a stadium');
     }
     
-    // Make sure we have all required fields
     if (!stadiumData.stadium_name || !stadiumData.stadium_address) {
       throw new Error('Stadium name and address are required');
     }
     
+    const dateAdd = new Date().toISOString();
+
     const { data, error } = await DB
       .from('add_stadium')
       .insert([{ 
         owner_id: ownerIdToUse,
         stadium_name: stadiumData.stadium_name,
         stadium_address: stadiumData.stadium_address,
-        stadium_image: stadiumData.stadium_image || null, // Changed to stadium_image_url to match URL-based approach
-        stadium_status: 'รออนุมัติ'
+        stadium_image: stadiumData.stadium_image || null,
+        stadium_status: 'รออนุมัติ',
+        date_add: dateAdd
       }])
       .select();
-    if (error) throw error;
+    
+    if (error) {
+      console.error("Database insert error:", error);
+      throw new Error(`Failed to insert stadium: ${error.message}`);
+    }
+    
+    console.log("Stadium added successfully:", data);
     return { data };
   } catch (err) {
-    console.error("Database error:", err);
+    console.error("Error in addStadium:", err);
     throw new Error('Failed to add stadium: ' + err.message);
   }
 };
 
-// FIXED - Better handling of JSON and error cases
-const getadd_stadiumByUserId = async (userId) => {
+const deleteStadium = async (stadiumId) => {
   try {
-    console.log("Fetching stadiums for user ID:", userId);
+    console.log(`Deleting stadium with ID: ${stadiumId}`);
+    console.log("Stadium ID type and value:", typeof stadiumId, stadiumId);
     
-    if (!userId) {
-      console.error("getadd_stadiumByUserId called with null/undefined userId");
-      return { data: [], error: "User ID is required" };
+    if (!stadiumId) {
+      throw new Error('Stadium ID is required to delete a stadium');
     }
     
-    // Parse userId if it's a JSON string
-    let parsedUserId = userId;
-    try {
-      if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
-        const parsed = JSON.parse(userId);
-        parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
-        console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
-      }
-    } catch (parseError) {
-      console.log("userId is not a JSON string, continuing with original value");
+    const { data: existingStadium, error: fetchError } = await DB
+      .from('add_stadium')
+      .select('*')
+      .eq('id', stadiumId)
+      .single();
+    
+    if (fetchError) {
+      console.error("Error checking stadium existence:", fetchError);
+      throw new Error(`Failed to check stadium existence: ${fetchError.message}`);
     }
     
-    // First, get the owner ID for the user
-    const { ownerId, error: ownerError } = await getOwnerIdByUserId(parsedUserId);
-    
-    if (ownerError || !ownerId) {
-      console.error('Error fetching owner ID:', ownerError);
-      return { data: [], error: 'No owner found for this user ID' };
+    if (!existingStadium) {
+      console.error(`Stadium with ID ${stadiumId} not found in the database during existence check`);
+      throw new Error('No stadium found with the given ID');
     }
     
-    console.log("Owner ID found:", ownerId);
+    console.log("Found stadium before deletion:", existingStadium);
     
-    return await getStadiumsByOwnerId(ownerId);
+    // Delete related courts first
+    const { error: courtDeleteError } = await DB
+      .from('add_court')
+      .delete()
+      .eq('stadium_id', stadiumId);
+    
+    if (courtDeleteError) {
+      console.error("Error deleting related courts:", courtDeleteError);
+      throw new Error(`Failed to delete related courts: ${courtDeleteError.message}`);
+    }
+    
+    // Perform the stadium delete operation
+    const { data, error, count } = await DB
+      .from('add_stadium')
+      .delete()
+      .eq('id', stadiumId)
+      .select();
+    
+    console.log("Delete operation result:", { data, error, count });
+    
+    if (error) {
+      console.error("Database delete error:", error);
+      throw new Error(`Failed to delete stadium: ${error.message}`);
+    }
+    
+    if (!data || data.length === 0) {
+      console.error(`Delete operation returned no data for stadium ID ${stadiumId}`);
+      throw new Error('No stadium found with the given ID or deletion failed');
+    }
+    
+    console.log("Stadium deleted successfully:", data);
+    return { data };
   } catch (err) {
-    console.error('Error in getadd_stadiumByUserId:', err);
-    return { data: [], error: err.message || 'An unexpected error occurred' };
+    console.error("Error in deleteStadium:", err);
+    throw new Error('Failed to delete stadium: ' + err.message);
   }
 };
 
-// NEW function to get stadiums by owner ID directly
 const getStadiumsByOwnerId = async (ownerId) => {
   try {
     console.log(`Fetching stadiums for owner ID: ${ownerId}`);
     
-    const { data, error } = await DB
+    const { data: stadiums, error: stadiumError } = await DB
       .from('add_stadium')
       .select('*')
       .eq('owner_id', ownerId);
     
-    if (error) {
-      console.error('Error fetching stadiums:', error);
+    if (stadiumError) {
+      console.error('Error fetching stadiums:', stadiumError);
       return { data: [], error: 'Failed to fetch stadiums' };
     }
     
-    console.log(`Found ${data?.length || 0} stadiums for owner ID ${ownerId}`);
+    console.log(`Found ${stadiums?.length || 0} stadiums for owner ID ${ownerId}`);
     
-    // Return empty array instead of null if no stadiums found
-    return { data: data || [], error: null };
+    if (!stadiums || stadiums.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const stadiumIds = stadiums.map(stadium => stadium.id);
+    const { data: courts, error: courtError } = await DB
+      .from('add_court')
+      .select('stadium_id, court_type, court_quantity')
+      .in('stadium_id', stadiumIds);
+
+    if (courtError) {
+      console.error("Error fetching courts:", courtError);
+      return { data: stadiums, error: courtError };
+    }
+
+    const sportsTypesByStadium = courts.reduce((acc, court) => {
+      const { stadium_id, court_type, court_quantity } = court;
+      if (!acc[stadium_id]) {
+        acc[stadium_id] = {};
+      }
+      if (!acc[stadium_id][court_type]) {
+        acc[stadium_id][court_type] = 0;
+      }
+      acc[stadium_id][court_type] += parseInt(court_quantity || 0, 10);
+      return acc;
+    }, {});
+
+    const enrichedStadiums = stadiums.map(stadium => {
+      const sportsTypes = sportsTypesByStadium[stadium.id] || {};
+      const sportsArray = Object.entries(sportsTypes).map(([name, count]) => ({
+        name,
+        count
+      }));
+      return {
+        ...stadium,
+        sports_types: sportsArray
+      };
+    });
+
+    return { data: enrichedStadiums, error: null };
   } catch (err) {
     console.error('Error in getStadiumsByOwnerId:', err);
     return { data: [], error: err.message || 'An unexpected error occurred' };
   }
 };
 
-const getStadiumById = async (stadiumId) => {
-  const { data, error } = await DB
-    .from('add_stadium')
-    .select('*')
-    .eq('id', stadiumId)
-    .single();
-  
-  if (error) {
-    console.error('Error fetching stadium:', error);
-    throw new Error('Failed to fetch stadium details');
-  }
-  
-  return { data, error };
-};
-
-const updateStadium = async (stadiumId, updateData) => {
-  // If updating stadium image, make sure it follows URL pattern
-  if (updateData.stadium_image) {
-    updateData.stadium_image = updateData.stadium_image;
-    delete updateData.stadium_image;
-  }
-  
-  const { data, error } = await DB
-    .from('add_stadium')
-    .update(updateData)
-    .eq('id', stadiumId)
-    .select();
-  
-  if (error) {
-    console.error('Error updating stadium:', error);
-    throw new Error('Failed to update stadium');
-  }
-  
-  return { data, error };
-};
-
-const deleteStadium = async (stadiumId) => {
-  const { error } = await DB
-    .from('add_stadium')
-    .delete()
-    .eq('id', stadiumId);
-  
-  if (error) {
-    console.error('Error deleting stadium:', error);
-    throw new Error('Failed to delete stadium');
-  }
-  
-  return { error };
-};
-
-// FIXED - More robust parsing and error handling
 const getOwnerIdByUserId = async (userId) => {
   try {
     console.log(`Looking up owner ID for user ID: ${userId}`);
@@ -163,12 +181,10 @@ const getOwnerIdByUserId = async (userId) => {
       return { ownerId: null, error: "User ID is required" };
     }
     
-    // Check if userId is a JSON string and parse it if needed
     let parsedUserId = userId;
     try {
       if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
         const parsed = JSON.parse(userId);
-        // Extract the actual user ID from the parsed object
         parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
         console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
       }
@@ -176,7 +192,6 @@ const getOwnerIdByUserId = async (userId) => {
       console.log("userId is not a JSON string, continuing with original value");
     }
     
-    // Try to find the owner in the owners table
     const { data, error } = await DB
       .from('owners')
       .select('*')
@@ -184,7 +199,7 @@ const getOwnerIdByUserId = async (userId) => {
       .single();
     
     if (error) {
-      if (error.code === 'PGRST116') { // No rows returned
+      if (error.code === 'PGRST116') {
         console.log(`No owner found for user ID: ${parsedUserId}`);
         return { ownerId: null, error: `No owner found for user ID: ${parsedUserId}` };
       }
@@ -198,7 +213,6 @@ const getOwnerIdByUserId = async (userId) => {
       return { ownerId: null, error: 'No owner found for the given user ID' };
     }
     
-    // Determine which field to use as the owner ID
     const ownerId = data.id || data.owner_id || data.user_id;
     
     console.log(`Found owner record for user ID: ${parsedUserId} with owner ID: ${ownerId}`);
@@ -209,115 +223,11 @@ const getOwnerIdByUserId = async (userId) => {
   }
 };
 
-// FIXED - Improved getUserId function with better error handling
-const getUserId = () => {
-  // Try localStorage first
-  const storedUserId = localStorage.getItem('userId');
-  
-  if (storedUserId) {
-    console.log("Found userId in localStorage:", storedUserId);
-    // Check if it's a JSON string and extract the ID if needed
-    try {
-      if (typeof storedUserId === 'string' && (storedUserId.startsWith('{') || storedUserId.startsWith('['))) {
-        const parsedUser = JSON.parse(storedUserId);
-        return parsedUser.id || parsedUser.userId || parsedUser.user_id || storedUserId;
-      }
-    } catch (e) {
-      console.error("Error parsing stored userId:", e);
-    }
-    return storedUserId;
-  }
-  
-  // Try sessionStorage as fallback
-  const sessionUserId = sessionStorage.getItem('userId');
-  if (sessionUserId) {
-    console.log("Found userId in sessionStorage:", sessionUserId);
-    // Check if it's a JSON string and extract the ID if needed
-    try {
-      if (typeof sessionUserId === 'string' && (sessionUserId.startsWith('{') || sessionUserId.startsWith('['))) {
-        const parsedUser = JSON.parse(sessionUserId);
-        return parsedUser.id || parsedUser.userId || parsedUser.user_id || sessionUserId;
-      }
-    } catch (e) {
-      console.error("Error parsing stored userId:", e);
-    }
-    return sessionUserId;
-  }
-  
-  // Try other possible storage keys
-  const possibleKeys = ['user_id', 'id', 'user'];
-  for (const key of possibleKeys) {
-    const value = localStorage.getItem(key) || sessionStorage.getItem(key);
-    if (value) {
-      console.log(`Found userId using alternative key '${key}':`, value);
-      // Check if it's a JSON string and extract the ID if needed
-      try {
-        if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
-          const parsedUser = JSON.parse(value);
-          return parsedUser.id || parsedUser.userId || parsedUser.user_id || value;
-        }
-      } catch (e) {
-        console.error(`Error parsing userId from key ${key}:`, e);
-      }
-      return value;
-    }
-  }
-  
-  // Try to parse JWT token for user ID
-  try {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (token) {
-      // Extract payload from JWT (without verification)
-      const base64Url = token.split('.')[1];
-      if (base64Url) {
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        
-        const payload = JSON.parse(jsonPayload);
-        const extractedId = payload.userId || payload.id || payload.user_id || payload.sub;
-        
-        if (extractedId) {
-          console.log("Extracted userId from JWT token:", extractedId);
-          // Save it for future use
-          localStorage.setItem('userId', extractedId);
-          return extractedId;
-        }
-      }
-    }
-  } catch (e) {
-    console.error("Error parsing JWT token:", e);
-  }
-  
-  return null;
-};
-
-// Helper function to handle image URLs
-const getStadiumImageUrl = (imageData) => {
-  if (!imageData) return null;
-  
-  // If already a URL, return as is
-  if (typeof imageData === 'string' && (imageData.startsWith('http') || imageData.startsWith('/'))) {
-    return imageData;
-  }
-  
-  // Otherwise, handle as needed (depends on how images are being uploaded)
-  console.log("Converting image data to URL format");
-  return imageData;
-};
-
-// Export as a module
 const dbsox = {
-  getUserId,
   addStadium,
-  getadd_stadiumByUserId,
-  getStadiumById,
-  updateStadium,
   deleteStadium,
   getOwnerIdByUserId,
-  getStadiumsByOwnerId, // Export the new function
-  getStadiumImageUrl // Export new helper function
+  getStadiumsByOwnerId
 };
 
 export default dbsox;
