@@ -32,7 +32,9 @@ const upload = multer({ storage });
 router.get('/update-cash', async (req, res) => {
   try {
     const cashUpdate = await getCashUpdate();
-    res.json(cashUpdate);
+    // เรียงข้อมูลจากล่าสุดไปเก่าสุด
+    const sortedCashUpdate = cashUpdate.sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.json(sortedCashUpdate);
   } catch (error) {
     console.error("Error in /update-cash route:", error);
     res.status(500).send('Error fetching cash update');
@@ -110,6 +112,39 @@ router.post('/complete-transfer', upload.single('slipImage'), async (req, res) =
     
   } catch (error) {
     console.error('Error in /complete-transfer route:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// เพิ่มในไฟล์ Backend_Sportflow\routes\routesJane\cashUpdate.js
+
+// Route สำหรับดึงรายละเอียดการโอน
+router.get('/transfer-details/:id_owner', async (req, res) => {
+  try {
+    const { id_owner } = req.params;
+    const { date } = req.query;
+
+    const { data, error } = await DB.from('cashhistory')
+      .select('paydate, nameadmin')
+      .eq('id_owner', id_owner)
+      .eq('date', date)
+      .single();
+
+    if (error) {
+      console.error('Error fetching transfer details:', error);
+      return res.status(500).json({ error: 'Failed to fetch transfer details' });
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Transfer details not found' });
+    }
+
+    res.json({
+      paydate: data.paydate,
+      nameadmin: data.nameadmin
+    });
+  } catch (error) {
+    console.error('Error in /transfer-details route:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

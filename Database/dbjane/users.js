@@ -271,5 +271,34 @@ async function countRegularUsers() {
 
 
 
-export { getAllUsers, getRegularUsers, getOwnerUsers, checkUserExists, deleteUser,countUsers,countOwnerUsers,countRegularUsers };
+// ฟังก์ชันดึงข้อมูลผู้ใช้ใหม่วันนี้
+async function getNewUsersToday() {
+    try {
+        const today = new Date().toISOString().split('T')[0]; // ได้วันที่ปัจจุบันในรูปแบบ YYYY-MM-DD
+        const { data: users, error: usersError } = await DB
+            .from('users')
+            .select('*')
+            .gte('created_at', `${today}T00:00:00`)
+            .lte('created_at', `${today}T23:59:59`);
 
+        const { data: owners, error: ownersError } = await DB
+            .from('owners')
+            .select('*');
+
+        if (usersError) throw usersError;
+        if (ownersError) throw ownersError;
+
+        const newUsers = {
+            total: users.length,
+            regular: users.filter(user => !owners.some(owner => owner.user_id === user.id)).length,
+            owners: users.filter(user => owners.some(owner => owner.user_id === user.id)).length
+        };
+
+        return { data: newUsers, error: null };
+    } catch (error) {
+        console.error('เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้ใหม่วันนี้:', error);
+        return { data: null, error: error.message };
+    }
+}
+
+export { getAllUsers, getRegularUsers, getOwnerUsers, checkUserExists, deleteUser, countUsers, countOwnerUsers, countRegularUsers, getNewUsersToday };
