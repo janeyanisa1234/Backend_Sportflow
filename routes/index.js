@@ -16,7 +16,13 @@ import cancleRoutes from "./routesJane/cancle.js";
 
 import pingRoutes from './routesping/ping.js';
 
+
+import paymentRoutes from './routespalmmy/payment.js';
+import historyRoutes from './routespalmmy/booking_history.js';
+import cancleRoutesUser from './routespalmmy/cancleroutes.js';
+
 import iceRoutes from './routesice/ice.js';
+
 
 
 
@@ -39,11 +45,18 @@ router.use('/field', FieldRoutes);
 router.use('/cashUpdate', cashUpdate);
 router.use('/stadium', stadiumRoutes);
 router.use('/cash', cashRoutes);  // เพิ่มเส้นทางใหม่ที่ใช้ cash.js
-router.use("/cancle", cancleRoutes);
+
+router.use('/', paymentRoutes);
+
+router.use('/history', historyRoutes);
+router.use('/', cancleRoutes);
+
+router.use("/cancle", cancleRoutesUser);
 router.use('/', paymentQR);
 router.use('/ice',iceRoutes);
 
 router.use('/ping', pingRoutes);
+
 
 
 export default router;
