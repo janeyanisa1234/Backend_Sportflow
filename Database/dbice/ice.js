@@ -78,7 +78,7 @@ export const getOwnerById = async (userId) => {
   
       if (ownerError) throw ownerError;
   
-      // รวมข้อมูล
+      
       return {
         name: user.name,
         email: user.email,

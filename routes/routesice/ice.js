@@ -224,7 +224,7 @@ router.post('/send-reset', authenticateToken, async (req, res) => {
       `,
     };
 
-    // Send email
+    
     await transporter.sendMail(mailOptions);
 
     res.json({ message: 'Password reset link has been sent to your email' });
