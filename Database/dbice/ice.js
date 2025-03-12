@@ -1,3 +1,4 @@
+import e from 'express';
 import DB from '../db.js';
 import bcrypt from 'bcrypt';
 
@@ -107,6 +108,10 @@ export const getOwnerById = async (userId) => {
   };
   
   
-
-export default { getUserById, verifyPassword,getOwnerById,updateUserName  };
-
+  export default { 
+    getUserById, 
+    verifyPassword, 
+    getOwnerById, 
+    updateUserName, 
+  
+  };
