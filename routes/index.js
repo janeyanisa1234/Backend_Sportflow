@@ -13,7 +13,9 @@ import cashUpdate from './routesJane/cashUpdate.js';
 import soxRoutes from './routessox/sox.js';
 import FieldRoutes from './routessox/field.js';
 
-import paymentQR from './routespalmmy/payment.js';
+import paymentRoutes from './routespalmmy/payment.js';
+import historyRoutes from './routespalmmy/booking_history.js';
+import cancleRoutes from './routespalmmy/cancleroutes.js';
 
 
 
@@ -40,8 +42,10 @@ router.use('/field', FieldRoutes);
 router.use('/cashUpdate', cashUpdate);
 router.use('/stadium', stadiumRoutes);
 router.use('/cash', cashRoutes);  // เพิ่มเส้นทางใหม่ที่ใช้ cash.js
-router.use('/', paymentQR);
+router.use('/', paymentRoutes);
 
+router.use('/history', historyRoutes);
+router.use('/', cancleRoutes);
 
 
 export default router;
