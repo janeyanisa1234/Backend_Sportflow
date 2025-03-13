@@ -150,97 +150,80 @@ router.post('/register-owner', upload.fields([
   }
 });
 
-// Update owner documents route
-router.put('/update-owner-documents', authenticateToken, upload.fields([
-  { name: 'idCardImage', maxCount: 1 },
-  { name: 'bankBookImage', maxCount: 1 }
-]), async (req, res) => {
+// Normal user registration endpoint
+router.post('/register', async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const files = req.files;
-    
-    // Check if user is an owner
-    const { data: ownerData, error: ownerError } = await dbKong.findOwnerByUserId(userId);
-    
-    if (ownerError || !ownerData) {
-      return res.status(403).json({ error: 'Only owners can update documents' });
+    const { name, email, phone, password } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ error: 'กรุณากรอกข้อมูลให้ครบทุกช่อง' });
     }
-    
-    const updates = {};
-    
-    // Process identity card image if provided
-    if (files && files.idCardImage && files.idCardImage[0]) {
-      const identityCardFile = files.idCardImage[0];
-      const filePath = identityCardFile.path;
-      const fileContent = fs.readFileSync(filePath);
-      const fileName = `identity_cards/${userId}/${Date.now()}_${path.basename(identityCardFile.filename)}`;
-      
-      // Upload file to storage bucket 'identity_card'
-      const { data: uploadData, error: uploadError } = await DB.storage
-        .from('identity_card')
-        .upload(fileName, fileContent, {
-          contentType: identityCardFile.mimetype,
-          cacheControl: '3600'
-        });
-      
-      if (uploadError) {
-        console.error('Error uploading identity card to storage:', uploadError);
-        return res.status(500).json({ error: 'Failed to upload identity card image' });
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'รูปแบบอีเมลไม่ถูกต้อง' });
+    }
+
+    // Validate phone number (Thai format)
+    const phoneRegex = /^0\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({ error: 'รูปแบบเบอร์โทรศัพท์ไม่ถูกต้อง (ต้องเป็นเบอร์โทรศัพท์ไทย 10 หลัก)' });
+    }
+
+    // Validate password length
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร' });
+    }
+
+    // Check if user already exists
+    const { data: existingUser } = await dbKong.findUserByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'มีผู้ใช้อีเมลนี้แล้ว' });
+    }
+
+    // Create new user
+    const { data: newUser, error: userError } = await dbKong.createUser({
+      name,
+      email,
+      phone,
+      password
+    });
+
+    if (userError) {
+      return res.status(500).json({ error: 'การลงทะเบียนล้มเหลว กรุณาลองอีกครั้ง' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: newUser[0].id,
+        email: newUser[0].email,
+        isOwner: false,
+        isAdmin: false
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Send response
+    res.status(201).json({
+      message: 'ลงทะเบียนสำเร็จ',
+      token,
+      user: {
+        id: newUser[0].id,
+        name: newUser[0].name,
+        email: newUser[0].email,
+        phone: newUser[0].phone,
+        isOwner: false,
+        isAdmin: false
       }
-      
-      // Get URL of the uploaded file
-      const { data: publicURL } = DB.storage
-        .from('identity_card')
-        .getPublicUrl(fileName);
-      
-      updates.identity_card_url = publicURL.publicUrl;
-      
-      // Clean up local file
-      fs.unlinkSync(filePath);
-    }
-    
-    // Process bank account image if provided
-    if (files && files.bankBookImage && files.bankBookImage[0]) {
-      const bankAccFile = files.bankBookImage[0];
-      const filePath = bankAccFile.path;
-      const fileContent = fs.readFileSync(filePath);
-      const fileName = `bank_accounts/${userId}/${Date.now()}_${path.basename(bankAccFile.filename)}`;
-      
-      // Upload file to storage bucket 'bank_acc'
-      const { data: uploadData, error: uploadError } = await DB.storage
-        .from('bank_acc')
-        .upload(fileName, fileContent, {
-          contentType: bankAccFile.mimetype,
-          cacheControl: '3600'
-        });
-      
-      if (uploadError) {
-        console.error('Error uploading bank account to storage:', uploadError);
-        return res.status(500).json({ error: 'Failed to upload bank account image' });
-      }
-      
-      // Get URL of the uploaded file
-      const { data: publicURL } = DB.storage
-        .from('bank_acc')
-        .getPublicUrl(fileName);
-      
-      updates.bank_acc_url = publicURL.publicUrl;
-      
-      // Clean up local file
-      fs.unlinkSync(filePath);
-    }
-    
-    // Only update if there are changes
-    if (Object.keys(updates).length > 0) {
-      await dbKong.updateOwnerDocuments(userId, updates);
-      return res.json({ message: 'Documents updated successfully', updates });
-    } else {
-      return res.status(400).json({ error: 'No documents provided for update' });
-    }
-    
+    });
+
   } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ error: 'Server error: ' + error.message });
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์' });
   }
 });
 
