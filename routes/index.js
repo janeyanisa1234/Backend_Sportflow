@@ -13,7 +13,7 @@ import soxRoutes from "./routessox/sox.js";
 import FieldRoutes from "./routessox/field.js";
 import paymentQR from "./routespalmmy/payment.js";
 import cancleRoutes from "./routesJane/cancle.js";
-
+import reportbookRoute from './routessox/ownerreportbooking.js';
 import pingRoutes from './routesping/ping.js';
 
 
@@ -34,7 +34,7 @@ router.use("/api", dashRoutes); // เพิ่ม dash.js ภายใต้ /a
 router.use("/users", dashRouter); // จาก dash.js (statistics, revenue, new-today)
 router.use("/users", userRoutes); // จาก routesJane/users.js (new-users-today)
 router.use("/gib", gibRoutes);
-
+router.use('/reportbooking', reportbookRoute);
 router.use('/booking', booking);
 router.use('/jane', janeRoutes);
 router.use('/users', userRoutes);  // เพิ่ม route ของ users
