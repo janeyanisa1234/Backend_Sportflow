@@ -43,16 +43,6 @@ router.get("/owner", authenticateToken, async (req, res) => {
     }
   });
 
-  router.get("/user", authenticateToken, async (req, res) => {
-    try {
-      const user = await dbice.getUserById(req.user.userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      res.json(user);
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
   // Change password after login endpoint
 router.post('/change-password', authenticateToken, async (req, res) => {
   try {
@@ -234,7 +224,7 @@ router.post('/send-reset', authenticateToken, async (req, res) => {
       `,
     };
 
-    // Send email
+    
     await transporter.sendMail(mailOptions);
 
     res.json({ message: 'Password reset link has been sent to your email' });
