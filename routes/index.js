@@ -36,10 +36,9 @@ router.use("/gib", gibRoutes);
 
 
 router.use('/reportbooking', reportbookRoute);
-router.use('/booking', booking);
 
- 
-router.use("/booking", promotionRoutes); // /booking/sports-categories และ /booking/filtered-stadiums
+router.use("/booking", promotionRoutes); // /booking/sports-categories, /booking/promoted-stadiums
+router.use("/booking", booking);// /booking/sports-categories และ /booking/filtered-stadiums
 
 
 router.use('/jane', janeRoutes);

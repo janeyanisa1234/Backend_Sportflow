@@ -125,14 +125,14 @@ async function getFilteredStadiums(sportType) {
 }
 
 
+// /Backend_Sportflow/Database/dbmild/sports.js
 async function getPromotedStadiums() {
   try {
     console.log('Fetching promoted stadiums...');
-    
-    // ดึงข้อมูลโปรโมชันที่มี promotion_status = "กำลังดำเนินการ"
+
     const { data: promotions, error: promoError } = await DB
       .from('sports_promotions')
-      .select('owner_id, location, sports, sports_list, discount_percentage, end_datetime')
+      .select('owner_id, location, sports, sports_list, discount_percentage, end_datetime, promotion_status')
       .eq('promotion_status', 'กำลังดำเนินการ')
       .limit(100);
 
@@ -147,9 +147,8 @@ async function getPromotedStadiums() {
       return [];
     }
 
-    const ownerIds = promotions.map(p => p.owner_id);
+    const ownerIds = promotions.map((p) => p.owner_id);
 
-    // ดึงข้อมูลสนามจาก add_stadium โดยใช้ owner_id
     const { data: stadiums, error: stadiumError } = await DB
       .from('add_stadium')
       .select('id, stadium_name, stadium_address, stadium_image, owner_id, stadium_status')
@@ -168,23 +167,26 @@ async function getPromotedStadiums() {
       return [];
     }
 
-    // รวมข้อมูลโปรโมชันกับสนาม และกรองโปรโมชั่นที่หมดอายุ
-    const currentDate = new Date(); // วันที่ปัจจุบัน (13 มีนาคม 2568)
-    const result = stadiums.map(stadium => {
-      const promo = promotions.find(p => p.owner_id === stadium.owner_id);
+    const currentDate = new Date();
+    currentDate.setUTCHours(0, 0, 0, 0);
+    const result = stadiums.map((stadium) => {
+      const promo = promotions.find((p) => p.owner_id === stadium.owner_id);
       let promotionData = null;
       if (promo) {
         try {
-          const promoDetails = promo.sports || (promo.sports_list ? JSON.parse(promo.sports_list) : {});
+          const promoDetails = promo.sports || (promo.sports_list ? JSON.parse(promo.sports_list || '{}') : {});
           const expiryDate = promo.end_datetime ? new Date(promo.end_datetime) : null;
-          if (expiryDate && expiryDate >= currentDate) {
-            promotionData = {
-              ...promoDetails,
-              discount_percentage: promo.discount_percentage || 0,
-              end_datetime: promo.end_datetime,
-              location: promo.location,
-            };
-          } // ถ้าสิ้นสุดแล้ว promotionData จะเป็น null
+          if (expiryDate) {
+            expiryDate.setUTCHours(0, 0, 0, 0);
+            if (expiryDate >= currentDate) {
+              promotionData = {
+                ...promoDetails,
+                discount_percentage: promo.discount_percentage || 0,
+                end_datetime: promo.end_datetime,
+                location: promo.location,
+              };
+            }
+          }
         } catch (parseError) {
           console.warn(`Failed to parse promotion for owner ${stadium.owner_id}:`, parseError.message);
           promotionData = { discount_percentage: promo.discount_percentage || 0, location: promo.location };
@@ -202,11 +204,6 @@ async function getPromotedStadiums() {
     console.error('Database error in getPromotedStadiums:', error.message, error.stack);
     throw error;
   }
-
-  
 }
 
 export { getSportsCategories, getFilteredStadiums, getPromotedStadiums };
-
- 
-

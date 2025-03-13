@@ -38,12 +38,10 @@ router.get('/filtered-stadiums', async (req, res) => {
 
 // ดึงสนามที่มีโปรโมชัน (promotion_status = "กำลังดำเนินการ")
 router.get('/promoted-stadiums', async (req, res) => {
-  console.log('Received request for /booking/promoted-stadiums, params:', req.params, 'query:', req.query);
   try {
     const stadiums = await getPromotedStadiums();
-    console.log('Promoted stadiums:', stadiums);
     if (!stadiums || stadiums.length === 0) {
-      return res.status(200).json([]); // ส่ง array ว่างถ้าไม่มีข้อมูล
+      return res.status(200).json([]);
     }
     res.json(stadiums);
   } catch (error) {
