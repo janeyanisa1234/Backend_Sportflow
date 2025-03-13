@@ -13,7 +13,7 @@ import soxRoutes from "./routessox/sox.js";
 import FieldRoutes from "./routessox/field.js";
 import paymentQR from "./routespalmmy/payment.js";
 import cancleRoutes from "./routesJane/cancle.js";
-
+import cancleAdmin from "./routesJane/cancle.js";
 import reportbookRoute from './routessox/ownerreportbooking.js';
 
 import pingRoutes from './routesping/ping.js';
@@ -47,6 +47,7 @@ router.use('/users', userRoutes);  // เพิ่ม route ของ users
 router.use('/kong', kongRoutes);
 router.use('/sox', soxRoutes);
 router.use('/field', FieldRoutes);
+router.use('/cancleAdmin', cancleAdmin);
  
 router.use('/cashUpdate', cashUpdate);
 router.use('/stadium', stadiumRoutes);
