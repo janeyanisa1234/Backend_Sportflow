@@ -191,6 +191,8 @@ async function getPromotedStadiums() {
     console.error('Database error in getPromotedStadiums:', error.message, error.stack);
     throw error;
   }
+
+  
 }
 
 export { getSportsCategories, getFilteredStadiums, getPromotedStadiums };
