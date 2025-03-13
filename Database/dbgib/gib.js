@@ -1,91 +1,92 @@
-import DB from "../db.js"; 
+import DB from "../db.js"; // Supabase Client สำหรับเชื่อมต่อฐานข้อมูล
 
-// ฟังก์ชันสำหรับจัดการโปรโมชัน
-export async function getAllPromotions(ownerId) { // ดึงโปรโมชันทั้งหมด
+
+// ดึงโปรโมชันทั้งหมดตาม ownerId
+export async function getAllPromotions(ownerId) {
   console.log(`Fetching promotions for owner_id: ${ownerId || "all"}...`);
   const supabase = DB;
 
   try {
-    let query = supabase.from("sports_promotions").select("*"); // สร้าง query ดึงโปรโมชัน
-    if (ownerId) query = query.eq("owner_id", ownerId); // กรองตาม ownerId ถ้ามี
+    let query = supabase.from("sports_promotions").select("*"); // สร้างคำสั่งดึงข้อมูลโปรโมชันทั้งหมด
+    if (ownerId) query = query.eq("owner_id", ownerId); // ถ้ามี ownerId จะกรองเฉพาะของเจ้าของนั้น
 
-    const { data: promotionsData, error: promotionsError } = await query; // ดึงข้อมูลโปรโมชัน
+    const { data: promotionsData, error: promotionsError } = await query; // ดึงข้อมูลจากตาราง sports_promotions
     if (promotionsError) {
-      console.error("Supabase error:", promotionsError); // log ข้อผิดพลาด
+      console.error("Supabase error:", promotionsError);
       throw new Error("Failed to fetch promotions: " + promotionsError.message);
     }
     if (!promotionsData || promotionsData.length === 0) {
-      console.warn(`No promotions found for owner_id: ${ownerId || "all"}`); // log ถ้าไม่มีข้อมูล
+      console.warn(`No promotions found for owner_id: ${ownerId || "all"}`);
       return [];
     }
+    console.log("Raw promotions data:", promotionsData);
 
-    console.log("Raw promotions data:", promotionsData); // log ข้อมูลดิบ
-
-    const { data: stadiumsData, error: stadiumsError } = await supabase // ดึงข้อมูลสนาม
+    const { data: stadiumsData, error: stadiumsError } = await supabase // ดึงข้อมูลสนามจากตาราง add_stadium
       .from("add_stadium")
       .select("id, stadium_name");
     if (stadiumsError) {
-      console.error("Supabase error fetching stadiums:", stadiumsError); 
+      console.error("Supabase error fetching stadiums:", stadiumsError);
       throw new Error("Failed to fetch stadiums: " + stadiumsError.message);
     }
 
-    const stadiumMap = stadiumsData.reduce((acc, stadium) => { // สร้าง map ชื่อสนาม
+    const stadiumMap = stadiumsData.reduce((acc, stadium) => { // สร้างตารางชื่อสนามเพื่อเชื่อมกับ location
       acc[stadium.id] = stadium.stadium_name || "ไม่ระบุ";
       return acc;
     }, {});
 
-    const currentDate = new Date(); // วันที่ปัจจุบัน
-    const updatedPromotions = await Promise.all(promotionsData.map(async (promo) => { // อัปเดตข้อมูลโปรโมชัน
+    const currentDate = new Date(); // ใช้ดูวันที่ปัจจุบันเพื่อเช็คสถานะ
+    const updatedPromotions = await Promise.all(promotionsData.map(async (promo) => {
       let sportsArray = [];
-      if (typeof promo.sports === "string") { // แปลง sports จาก string
+      if (typeof promo.sports === "string") { // ถ้า sports เป็น string จะแปลงเป็น array
         try {
           sportsArray = JSON.parse(promo.sports);
         } catch (e) {
-          console.warn(`Invalid JSON in sports for promotion ${promo.id}:`, promo.sports); // log ถ้า JSON ผิด
+          console.warn(`Invalid JSON in sports for promotion ${promo.id}:`, promo.sports);
           sportsArray = [];
         }
-      } else if (Array.isArray(promo.sports)) sportsArray = promo.sports; // ใช้ array เดิมถ้ามี
+      } else if (Array.isArray(promo.sports)) sportsArray = promo.sports;
 
-      const mappedStadiumName = stadiumMap[promo.location] || "ไม่พบชื่อสนาม (ID: " + promo.location + ")"; // ชื่อสนาม
-      const endDate = new Date(promo.end_datetime); // วันที่สิ้นสุด
-      const calculatedStatus = endDate > currentDate ? "กำลังดำเนินการ" : "หมดอายุแล้ว"; // คำนวณสถานะ
+      const mappedStadiumName = stadiumMap[promo.location] || "ไม่พบชื่อสนาม (ID: " + promo.location + ")";
+      const endDate = new Date(promo.end_datetime);
+      const calculatedStatus = endDate > currentDate ? "กำลังดำเนินการ" : "หมดอายุแล้ว"; // คำนวณสถานะจากวันที่สิ้นสุด
 
-      if (promo.promotion_status !== calculatedStatus || promo.promotion_status == null) { // อัปเดตสถานะถ้าต่าง
-        await updatePromotionStatus(promo.id, calculatedStatus);
+      if (promo.promotion_status !== calculatedStatus || promo.promotion_status == null) {
+        await updatePromotionStatus(promo.id, calculatedStatus); // อัปเดตสถานะถ้าต่างจากที่คำนวณ
       }
 
-      return {
-        id: promo.id, // ID โปรโมชัน
-        promotion_name: promo.promotion_name, // ชื่อ
-        start_datetime: promo.start_datetime, // วันที่เริ่ม
-        end_datetime: promo.end_datetime, // วันที่สิ้นสุด
-        discount_percentage: promo.discount_percentage, // ส่วนลด
-        promotion_status: calculatedStatus, // สถานะ
-        location: promo.location || "ไม่ระบุ", // สถานที่
-        stadium_name: mappedStadiumName, // ชื่อสนาม
-        sports: sportsArray, // รายการกีฬา
-        owner_id: promo.owner_id, // ID เจ้าของ
+      return { // ส่งข้อมูลโปรโมชันที่จัดรูปแบบแล้ว
+        id: promo.id,
+        promotion_name: promo.promotion_name,
+        start_datetime: promo.start_datetime,
+        end_datetime: promo.end_datetime,
+        discount_percentage: promo.discount_percentage,
+        promotion_status: calculatedStatus,
+        location: promo.location || "ไม่ระบุ",
+        stadium_name: mappedStadiumName,
+        sports: sportsArray,
+        owner_id: promo.owner_id,
       };
     }));
 
-    return updatedPromotions; // คืนค่าโปรโมชันที่อัปเดต
+    return updatedPromotions;
   } catch (error) {
-    console.error("Unexpected error in getAllPromotions:", error); 
+    console.error("Unexpected error in getAllPromotions:", error);
     throw error;
   }
 }
 
-export async function getPromotionById(id) { // ดึงโปรโมชันตาม ID
+// ดึงโปรโมชันตาม ID
+export async function getPromotionById(id) {
   console.log(`Fetching promotion with id ${id}...`);
   const supabase = DB;
 
   try {
-    if (!supabase) throw new Error("Supabase client is not initialized"); // ตรวจสอบ Supabase
+    if (!supabase) throw new Error("Supabase client is not initialized");
 
-    const parsedId = parseInt(id, 10); // แปลง ID เป็น integer
-    if (isNaN(parsedId)) throw new Error("Invalid ID format: ID must be a valid integer"); // ตรวจสอบ ID
+    const parsedId = parseInt(id, 10); // แปลง id จาก string เป็นตัวเลข
+    if (isNaN(parsedId)) throw new Error("Invalid ID format: ID must be a valid integer");
 
-    const { data, error } = await supabase // ดึงข้อมูลโปรโมชัน
+    const { data, error } = await supabase // ดึงข้อมูลโปรโมชันจากตารางตาม id
       .from("sports_promotions")
       .select("*")
       .eq("id", parsedId)
@@ -95,48 +96,47 @@ export async function getPromotionById(id) { // ดึงโปรโมชั�
       throw new Error("Failed to fetch promotion: " + error.message);
     }
     if (!data) {
-      console.warn(`No promotion found with id ${parsedId}`); // log ถ้าไม่พบ
+      console.warn(`No promotion found with id ${parsedId}`);
       throw new Error("Promotion not found");
     }
-
-    console.log("Raw promotion data:", data); // log ข้อมูลดิบ
+    console.log("Raw promotion data:", data);
     const promo = data;
 
-    let stadiumName = "ไม่ระบุ"; // ค่าเริ่มต้นชื่อสนาม
-    if (promo.location) { // ดึงชื่อสนาม
+    let stadiumName = "ไม่ระบุ";
+    if (promo.location) { // ดึงชื่อสนามจาก location
       const { data: stadiumData, error: stadiumError } = await supabase
         .from("add_stadium")
         .select("stadium_name")
         .eq("id", promo.location)
         .single();
-      if (stadiumError) console.error("Supabase error fetching stadium:", stadiumError); 
+      if (stadiumError) console.error("Supabase error fetching stadium:", stadiumError);
       else if (stadiumData) stadiumName = stadiumData.stadium_name || "ไม่ระบุ";
     }
 
-    let sportsArray = []; // แปลง sports
-    if (typeof promo.sports === "string") {
+    let sportsArray = [];
+    if (typeof promo.sports === "string") { // แปลง sports เป็น array
       try {
         sportsArray = JSON.parse(promo.sports);
       } catch (e) {
-        console.warn(`Invalid JSON in sports for promotion ${promo.id}:`, promo.sports); // log ถ้า JSON ผิด
+        console.warn(`Invalid JSON in sports for promotion ${promo.id}:`, promo.sports);
         sportsArray = [];
       }
     } else if (Array.isArray(promo.sports)) sportsArray = promo.sports;
 
-    const currentDate = new Date(); // วันที่ปัจจุบัน
-    const endDate = new Date(promo.end_datetime); // วันที่สิ้นสุด
-    const calculatedStatus = endDate > currentDate ? "กำลังดำเนินการ" : "หมดอายุแล้ว"; // คำนวณสถานะ
+    const currentDate = new Date();
+    const endDate = new Date(promo.end_datetime);
+    const calculatedStatus = endDate > currentDate ? "กำลังดำเนินการ" : "หมดอายุแล้ว";
 
-    if (promo.promotion_status !== calculatedStatus || promo.promotion_status == null) { // อัปเดตสถานะ
+    if (promo.promotion_status !== calculatedStatus || promo.promotion_status == null) {
       try {
-        await updatePromotionStatus(promo.id, calculatedStatus);
+        await updatePromotionStatus(promo.id, calculatedStatus); // อัปเดตสถานะถ้าจำเป็น
         console.log(`Updated status for promotion ${promo.id} to ${calculatedStatus}`);
       } catch (error) {
-        console.error(`Failed to update status for promotion ${promo.id}:`, error); 
+        console.error(`Failed to update status for promotion ${promo.id}:`, error);
       }
     }
 
-    return { // คืนค่าข้อมูลโปรโมชัน
+    return { // ส่งข้อมูลโปรโมชันที่จัดรูปแบบแล้ว
       id: promo.id,
       promotion_name: promo.promotion_name,
       start_datetime: promo.start_datetime,
@@ -149,68 +149,31 @@ export async function getPromotionById(id) { // ดึงโปรโมชั�
       owner_id: promo.owner_id,
     };
   } catch (error) {
-    console.error("Unexpected error in getPromotionById:", error); 
+    console.error("Unexpected error in getPromotionById:", error);
     throw error;
   }
 }
 
-export async function updatePromotionStatus(id, status) { // อัปเดตสถานะโปรโมชัน
-  const supabase = DB;
-  console.log(`Updating promotion status for id ${id} to ${status}`);
-  const { data, error } = await supabase // อัปเดตข้อมูล
-    .from("sports_promotions")
-    .update({ promotion_status: status })
-    .eq("id", id)
-    .select();
-  if (error) {
-    console.error("Supabase error:", error); 
-    throw error;
-  }
-  console.log("Updated promotion:", data[0]); 
-  return data[0];
-}
-
-export async function updatePromotion(id, updates) { // อัปเดตข้อมูลโปรโมชัน
-  const supabase = DB;
-  console.log(`Updating promotion with id ${id}:`, updates);
-  const { data, error } = await supabase // อัปเดตข้อมูล
-    .from("sports_promotions")
-    .update({
-      promotion_name: updates.promotion_name,
-      start_datetime: updates.start_datetime,
-      end_datetime: updates.end_datetime,
-      discount_percentage: updates.discount_percentage,
-    })
-    .eq("id", id)
-    .select();
-  if (error) {
-    console.error("Supabase error:", error); 
-    throw error;
-  }
-  if (data.length === 0) return null; // ถ้าไม่มีข้อมูล
-  console.log("Updated promotion:", data[0]); // log ข้อมูลที่อัปเดต
-  return data[0];
-}
-
-export async function addPromotion(promotion) { // เพิ่มโปรโมชันใหม่
+// เพิ่มโปรโมชันใหม่
+export async function addPromotion(promotion) {
   const supabase = DB;
   const { promotion_name, start_date, start_time, end_date, end_time, discount, location, sports, owner_id } = promotion;
 
-  if (!promotion_name || !start_date || !start_time || !end_date || !end_time || !discount || !location || !sports || !owner_id) { // ตรวจสอบข้อมูล
-    throw new Error("All required fields including owner_id and location must be provided");
+  if (!promotion_name || !start_date || !start_time || !end_date || !end_time || !discount || !location || !sports || !owner_id) {
+    throw new Error("All required fields including owner_id and location must be provided"); // ตรวจสอบว่าข้อมูลครบ
   }
 
-  const validSports = Array.isArray(sports) && sports.length > 0 // แปลง sports
+  const validSports = Array.isArray(sports) && sports.length > 0 // จัดรูปแบบ sports เป็น array
     ? sports.map(sport => ({
         name: sport.name || "Unknown",
         price: Number(sport.price) || 0,
         discountPrice: Number(sport.discountPrice) || 0,
       }))
     : [];
-  const sportsList = validSports.map(sport => `${sport.name}:${sport.discountPrice}`).join(", "); // รายการกีฬาแบบ string
+  const sportsList = validSports.map(sport => `${sport.name}:${sport.discountPrice}`).join(", ");
 
   try {
-    const { data, error } = await supabase // เพิ่มข้อมูล
+    const { data, error } = await supabase // บันทึกโปรโมชันใหม่ลงตาราง
       .from("sports_promotions")
       .insert([{
         promotion_name,
@@ -225,65 +188,145 @@ export async function addPromotion(promotion) { // เพิ่มโปรโ�
       }])
       .select();
     if (error) {
-      console.error("Supabase error:", error); 
+      console.error("Supabase error:", error);
       throw error;
     }
-    console.log("Added promotion:", data); // log ข้อมูลที่เพิ่ม
-    return data;
+    console.log("Added promotion:", data);
+    return data; // ส่งข้อมูลที่เพิ่มกลับ
   } catch (error) {
-    console.error("Unexpected error in addPromotion:", error); 
+    console.error("Unexpected error in addPromotion:", error);
     throw error;
   }
 }
 
-export async function deletePromotion(id) { // ลบโปรโมชัน
+// อัปเดตข้อมูลโปรโมชัน
+export async function updatePromotion(id, updates) {
+  const supabase = DB;
+  console.log(`Updating promotion with id ${id}:`, updates);
+
+  try {
+    const { data, error } = await supabase // อัปเดตข้อมูลในตารางตาม id
+      .from("sports_promotions")
+      .update({
+        promotion_name: updates.promotion_name,
+        start_datetime: updates.start_datetime,
+        end_datetime: updates.end_datetime,
+        discount_percentage: updates.discount_percentage,
+      })
+      .eq("id", id)
+      .select();
+    if (error) {
+      console.error("Supabase error:", error);
+      throw error;
+    }
+    if (data.length === 0) return null;
+    console.log("Updated promotion:", data[0]);
+    return data[0]; // ส่งข้อมูลที่อัปเดตกลับ
+  } catch (error) {
+    console.error("Unexpected error in updatePromotion:", error);
+    throw error;
+  }
+}
+
+// อัปเดตสถานะโปรโมชัน
+export async function updatePromotionStatus(id, status) {
+  const supabase = DB;
+  console.log(`Updating promotion status for id ${id} to ${status}`);
+
+  try {
+    const { data, error } = await supabase // อัปเดตสถานะในตาราง
+      .from("sports_promotions")
+      .update({ promotion_status: status })
+      .eq("id", id)
+      .select();
+    if (error) {
+      console.error("Supabase error:", error);
+      throw error;
+    }
+    console.log("Updated promotion:", data[0]);
+    return data[0];
+  } catch (error) {
+    console.error("Unexpected error in updatePromotionStatus:", error);
+    throw error;
+  }
+}
+
+// ลบโปรโมชัน
+export async function deletePromotion(id) {
   const supabase = DB;
   console.log(`Deleting promotion with id ${id}`);
-  const { error } = await supabase.from("sports_promotions").delete().eq("id", id); // ลบข้อมูล
-  if (error) {
-    console.error("Supabase error:", error); 
-  }
-  console.log("Deletion successful"); // log การลบสำเร็จ
-  return true;
-}
 
-// ฟังก์ชันสำหรับจัดการข้อมูลอื่นๆ
-export async function fetchData() { // ดึงข้อมูลทั้งหมด
-  console.log("Fetching all data...");
-  const supabase = DB;
-  const { data, error } = await supabase.from("sports_promotions").select("*"); // ดึงข้อมูล
-  if (error) {
-    console.error("Supabase error:", error); 
+  try {
+    const { error } = await supabase.from("sports_promotions").delete().eq("id", id); // ลบข้อมูลจากตารางตาม id
+    if (error) {
+      console.error("Supabase error:", error);
+      throw error;
+    }
+    console.log("Deletion successful");
+    return true; // ส่งผลลัพธ์ว่าลบสำเร็จ
+  } catch (error) {
+    console.error("Unexpected error in deletePromotion:", error);
     throw error;
   }
-  console.log("Fetched data:", data); // log ข้อมูลที่ได้
-  return data;
 }
 
-export async function getAllSports(stadiumId) { // ดึงกีฬาทั้งหมดตาม stadiumId
+// ---- ฟังก์ชันจัดการข้อมูลสนามและกีฬา ----
+
+// ดึงสนามทั้งหมดตาม ownerId
+export async function getAllStadiums(ownerId) {
+  console.log(`Fetching stadiums for owner_id: ${ownerId}...`);
+  const supabase = DB;
+
+  try {
+    let query = supabase.from("add_stadium").select("id, owner_id, stadium_name").not("stadium_name", "is", null); // ดึงข้อมูลสนามทั้งหมด
+    if (ownerId) query = query.eq("owner_id", ownerId); // กรองตาม ownerId ถ้ามี
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("Supabase error:", error);
+      throw new Error("Failed to fetch stadiums: " + error.message);
+    }
+    if (!data || data.length === 0) {
+      console.warn(`No stadiums found for owner_id: ${ownerId || "all"}`);
+      return [];
+    }
+    console.log("Fetched stadiums:", data);
+
+    return data.map(item => ({ // จัดรูปแบบข้อมูลสนาม
+      id: item.id,
+      owner_id: item.owner_id,
+      name: item.stadium_name || "ไม่ระบุ",
+    }));
+  } catch (error) {
+    console.error("Unexpected error in getAllStadiums:", error);
+    throw error;
+  }
+}
+
+// ดึงกีฬาทั้งหมดตาม stadiumId
+export async function getAllSports(stadiumId) {
   console.log("Fetching all sports for stadiumId:", stadiumId);
   const supabase = DB;
 
   try {
     if (!stadiumId) {
-      console.warn("No stadiumId provided"); // log ถ้าไม่มี stadiumId
+      console.warn("No stadiumId provided");
       return [];
     }
 
-    const { data: sportsData, error: sportsError } = await supabase // ดึงข้อมูลกีฬา
+    const { data: sportsData, error: sportsError } = await supabase // ดึงข้อมูลกีฬาจากตาราง add_court
       .from("add_court")
       .select("id, court_type, court_price, court_image, stadium_id")
       .eq("stadium_id", stadiumId);
     if (sportsError) {
-      console.error("Supabase error:", sportsError); 
+      console.error("Supabase error:", sportsError);
       throw new Error("Failed to fetch sports: " + sportsError.message);
     }
     if (!sportsData || sportsData.length === 0) {
-      console.warn(`No sports found for stadiumId: ${stadiumId}`); // log ถ้าไม่มีข้อมูล
+      console.warn(`No sports found for stadiumId: ${stadiumId}`);
       return [];
     }
-
-    console.log("Fetched sports:", sportsData); // log ข้อมูลกีฬา
+    console.log("Fetched sports:", sportsData);
 
     const { data: stadiumData, error: stadiumError } = await supabase // ดึงชื่อสนาม
       .from("add_stadium")
@@ -291,14 +334,13 @@ export async function getAllSports(stadiumId) { // ดึงกีฬาทั�
       .eq("id", stadiumId)
       .single();
     if (stadiumError) {
-      console.error("Supabase error:", stadiumError); 
+      console.error("Supabase error:", stadiumError);
       throw new Error("Failed to fetch stadium: " + stadiumError.message);
     }
+    const stadiumName = stadiumData?.stadium_name || "ไม่ระบุ";
+    console.log("Fetched stadium name:", stadiumName);
 
-    const stadiumName = stadiumData?.stadium_name || "ไม่ระบุ"; // ชื่อสนาม
-    console.log("Fetched stadium name:", stadiumName); // log ชื่อสนาม
-
-    return sportsData.map((sport) => ({ // คืนค่าข้อมูลกีฬา
+    return sportsData.map(sport => ({ // จัดรูปแบบข้อมูลกีฬา
       id: sport.id,
       name: sport.court_type,
       price: sport.court_price,
@@ -307,37 +349,7 @@ export async function getAllSports(stadiumId) { // ดึงกีฬาทั�
       stadiumName,
     }));
   } catch (error) {
-    console.error("Unexpected error in getAllSports:", error); 
-    throw error;
-  }
-}
-
-export async function getAllStadiums(ownerId) { // ดึงสนามทั้งหมด
-  console.log(`Fetching stadiums for owner_id: ${ownerId}...`);
-  const supabase = DB;
-
-  try {
-    let query = supabase.from("add_stadium").select("id, owner_id, stadium_name").not("stadium_name", "is", null); // ดึงข้อมูลสนาม
-    if (ownerId) query = query.eq("owner_id", ownerId); // กรองตาม ownerId ถ้ามี
-
-    const { data, error } = await query; // ดึงข้อมูล
-    if (error) {
-      console.error("Supabase error:", error); 
-      throw new Error("Failed to fetch stadiums: " + error.message);
-    }
-    if (!data || data.length === 0) {
-      console.warn(`No stadiums found for owner_id: ${ownerId || "all"}`); // log ถ้าไม่มีข้อมูล
-      return [];
-    }
-
-    console.log("Fetched stadiums:", data); // log ข้อมูลสนาม
-    return data.map((item) => ({ // คืนค่าข้อมูลสนาม
-      id: item.id,
-      owner_id: item.owner_id,
-      name: item.stadium_name || "ไม่ระบุ",
-    }));
-  } catch (error) {
-    console.error("Unexpected error in getAllStadiums:", error); 
+    console.error("Unexpected error in getAllSports:", error);
     throw error;
   }
 }
