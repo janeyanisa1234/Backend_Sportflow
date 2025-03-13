@@ -1,3 +1,4 @@
+
 // /Backend_Sportflow/routes/routesmild/PromotionRoutes.js
 import express from 'express';
 import { getSportsCategories, getFilteredStadiums, getPromotedStadiums } from '../../Database/dbmild/sports.js';
@@ -34,6 +35,7 @@ router.get('/filtered-stadiums', async (req, res) => {
   }
 });
 
+
 // ดึงสนามที่มีโปรโมชัน (promotion_status = "กำลังดำเนินการ")
 router.get('/promoted-stadiums', async (req, res) => {
   console.log('Received request for /booking/promoted-stadiums, params:', req.params, 'query:', req.query);
@@ -49,5 +51,6 @@ router.get('/promoted-stadiums', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch promoted stadiums', details: error.message });
   }
 });
+
 
 export default router;

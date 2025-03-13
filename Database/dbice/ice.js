@@ -1,4 +1,4 @@
-import e from 'express';
+
 import DB from '../db.js';
 import bcrypt from 'bcrypt';
 
@@ -78,7 +78,7 @@ export const getOwnerById = async (userId) => {
   
       if (ownerError) throw ownerError;
   
-      // รวมข้อมูล
+      
       return {
         name: user.name,
         email: user.email,

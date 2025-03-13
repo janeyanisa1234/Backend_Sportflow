@@ -4,8 +4,10 @@ async function getSportsCategories() {
   try {
     console.log('Fetching sports categories from add_court...');
     const { data: courts, error } = await DB
+
       .from('add_court')
       .select('court_type');
+
 
     if (error) {
       console.error('Supabase error in getSportsCategories:', error.message, error.details, error.hint);
@@ -27,9 +29,11 @@ async function getSportsCategories() {
   }
 }
 
+
 async function getFilteredStadiums(sportType) {
   try {
     if (!sportType) throw new Error('sportType is required');
+
 
     console.log('Fetching courts for sportType:', sportType);
     const { data: courts, error: courtError } = await DB
@@ -49,8 +53,10 @@ async function getFilteredStadiums(sportType) {
       return [];
     }
 
+
     const stadiumIds = courts.map(c => c.stadium_id);
     console.log('Stadium IDs:', stadiumIds);
+
 
     const { data: stadiums, error: stadiumError } = await DB.from('add_stadium')
       .select('id, stadium_name, stadium_address, stadium_image, owner_id, stadium_status')
@@ -69,11 +75,13 @@ async function getFilteredStadiums(sportType) {
       return [];
     }
 
+
     const ownerIds = stadiums.map(s => s.owner_id);
     const { data: promotions, error: promoError } = await DB.from('sports_promotions')
       .select('owner_id, location, sports, sports_list, discount_percentage, end_datetime')
       .in('owner_id', ownerIds)
       .limit(100);
+
 
     if (promoError) {
       console.error('Supabase promotion error:', promoError.message, promoError.details, promoError.hint);
@@ -87,6 +95,7 @@ async function getFilteredStadiums(sportType) {
       if (promo) {
         try {
           const promoDetails = promo.sports || (promo.sports_list ? JSON.parse(promo.sports_list) : {});
+
           const currentDate = new Date(); // วันที่ปัจจุบัน (13 มีนาคม 2568)
           const expiryDate = promo.end_datetime ? new Date(promo.end_datetime) : null;
           if (expiryDate && expiryDate >= currentDate) {
@@ -96,6 +105,7 @@ async function getFilteredStadiums(sportType) {
               end_datetime: promo.end_datetime,
             };
           } // ถ้าสิ้นสุดแล้ว promotionData จะเป็น null
+
         } catch (parseError) {
           console.warn(`Failed to parse promotion for owner ${stadium.owner_id}:`, parseError.message);
           promotionData = { name: "ข้อมูลโปรโมชั่นไม่ถูกต้อง", discount_percentage: promo.discount_percentage || 0 };
@@ -113,6 +123,7 @@ async function getFilteredStadiums(sportType) {
     throw error;
   }
 }
+
 
 async function getPromotedStadiums() {
   try {
@@ -196,3 +207,6 @@ async function getPromotedStadiums() {
 }
 
 export { getSportsCategories, getFilteredStadiums, getPromotedStadiums };
+
+ 
+

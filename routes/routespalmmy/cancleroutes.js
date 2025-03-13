@@ -55,8 +55,12 @@ router.post('/cancel', async (req, res) => {
       });
     }
 
+    // อัปเดต status_booking และ status_timebooking
     const { data: updateData, error: updateError } = await DB.from('Booking')
-      .update({ status_booking: 'รอดำเนินการยกเลิก' })
+      .update({ 
+        status_booking: 'รอดำเนินการยกเลิก',
+        status_timebooking: false // ตั้งค่าเป็น false เพราะสถานะเป็น "รอดำเนินการยกเลิก"
+      })
       .eq('id_booking', booking_id);
 
     if (updateError) {
@@ -77,7 +81,6 @@ router.post('/cancel', async (req, res) => {
     res.status(500).json({ error: "Internal Server Error", details: error.message });
   }
 });
-
 router.post('/refund', upload.single('bankimges'), multerErrorHandler, async (req, res) => {
   try {
     console.log('Received body:', req.body);

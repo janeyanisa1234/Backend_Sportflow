@@ -3,19 +3,27 @@ import { getStadiumsWithCourtsAndTimes } from '../../Database/dbmild/booking.js'
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
+import fs from 'fs/promises';
 import DB from '../../Database/db.js';
+
+import axios from 'axios';
+import FormData from 'form-data';
+
 
 const router = express.Router();
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: async (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    try {
+      await fs.stat(uploadDir).catch(async () => {
+        await fs.mkdir(uploadDir, { recursive: true });
+      });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueFilename = `${uuidv4()}${path.extname(file.originalname)}`;
@@ -36,6 +44,13 @@ const multerErrorHandler = (err, req, res, next) => {
   }
   next(err);
 };
+
+
+// ข้อมูลที่ต้องตรวจสอบ
+const EXPECTED_ACCOUNT = "ณัฐฐา ";
+const SLIPOK_API_URL = 'https://api.slipok.com/api/line/apikey/40730';
+const SLIPOK_API_KEY = 'SLIPOK41AJXKE';
+
 
 // Get all stadiums
 router.get('/stadiums', async (req, res) => {
@@ -136,6 +151,7 @@ router.get('/:bookingId', async (req, res) => {
   }
 });
 
+
 router.get('/confirm/booked-slots', async (req, res) => {
   try {
     const { stadiumName, date } = req.query;
@@ -174,7 +190,9 @@ router.get('/confirm/booked-slots', async (req, res) => {
 });
 
 // Confirm booking with slip and insert into Booking table
+
 router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (req, res) => {
+  let imagePath;
   try {
     console.log('Request headers:', req.headers);
     console.log('Request body:', req.body);
@@ -230,6 +248,68 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
         error: 'Time slot conflict',
         details: `The following slots are already booked: ${overlappingSlots.join(', ')}`,
       });
+
+    const EXPECTED_AMOUNT = Number(totalPrice).toFixed(2);
+    imagePath = uploadedFile.path;
+
+    // ตรวจสอบว่าไฟล์มีอยู่จริง
+    if (!(await fs.stat(imagePath).catch(() => false))) {
+      throw new Error(`File not found at path: ${imagePath}`);
+    }
+
+    // อ่านไฟล์เป็น Buffer
+    const fileBuffer = await fs.readFile(imagePath);
+
+    // สร้าง FormData สำหรับ SlipOK API
+    const slipFormData = new FormData();
+    slipFormData.append('files', fileBuffer, {
+      filename: uploadedFile.originalname,
+      contentType: uploadedFile.mimetype,
+    });
+    slipFormData.append('amount', EXPECTED_AMOUNT);
+    slipFormData.append('log', 'true');
+
+    console.log('Sending to SlipOK:', { url: SLIPOK_API_URL, amount: EXPECTED_AMOUNT });
+
+    // ส่งคำขอไปยัง SlipOK API
+    let slipResponse;
+    try {
+      slipResponse = await axios.post(SLIPOK_API_URL, slipFormData, {
+        headers: {
+          'x-authorization': SLIPOK_API_KEY,
+          ...slipFormData.getHeaders(),
+        },
+        timeout: 10000,
+      });
+    } catch (apiError) {
+      console.error('SlipOK API Error:', {
+        status: apiError.response?.status,
+        data: apiError.response?.data,
+        message: apiError.message,
+        errors: apiError.response?.data?.errors ? JSON.stringify(apiError.response.data.errors, null, 2) : 'No detailed errors provided',
+      });
+      throw apiError;
+    }
+
+    const slipData = slipResponse.data;
+    console.log('SlipOK Response:', slipData);
+
+    // ตรวจสอบข้อมูลจาก SlipOK
+    if (!slipData || !slipData.success) { // เปลี่ยนจาก status เป็น success
+      throw new Error(`สลิปไม่ถูกต้องหรือตรวจสอบไม่สำเร็จ: ${slipData?.message || 'Unknown error'}`);
+    }
+
+    // ตรวจสอบจำนวนเงินจาก slipData.data.amount
+    const receivedAmount = slipData.data?.amount ? String(slipData.data.amount.toFixed(2)) : null;
+    if (!receivedAmount || receivedAmount !== EXPECTED_AMOUNT) {
+      throw new Error(`จำนวนเงินในสลิป (${receivedAmount || 'ไม่พบ'}) ไม่ตรงกับที่คาดหวัง (${EXPECTED_AMOUNT})`);
+    }
+
+    // ตรวจสอบชื่อบัญชีปลายทางจาก slipData.data.receiver.displayName
+    const toAccountName = slipData.data?.receiver?.displayName || '';
+    if (!toAccountName.includes(EXPECTED_ACCOUNT)) {
+      throw new Error(`ชื่อบัญชีปลายทาง (${toAccountName || 'ไม่พบ'}) ไม่ตรงกับ "${EXPECTED_ACCOUNT}"`);
+
     }
 
     const bookingData = {
@@ -245,12 +325,17 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       status_booking: 'ยืนยัน', // อัปเดตสถานะเป็น "ยืนยัน"
       status_timebooking: true, // อัปเดตเป็น true เมื่อการจองสำเร็จ
       SlipPayment: '',
+
       date: date || new Date().toISOString().split("T")[0],
       time: time || new Date().toTimeString().split(" ")[0],
     };
 
-    const filePath = uploadedFile.path;
-    const fileContent = fs.readFileSync(filePath);
+
+ 
+
+    // อัปโหลดสลิปไปยัง Supabase Storage
+    const fileContent = fileBuffer;
+
     const fileName = `${Date.now()}_${path.basename(uploadedFile.filename)}`;
 
     const { data: uploadData, error: uploadError } = await DB.storage
@@ -262,8 +347,9 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
 
     if (uploadError) {
       console.error('Error uploading slip to storage:', uploadError);
-      fs.unlinkSync(filePath);
-      return res.status(500).json({ error: 'Failed to upload slip image', details: uploadError.message });
+
+      throw new Error(`Failed to upload slip image: ${uploadError.message}`);
+
     }
 
     const { data: publicURL } = DB.storage.from('payment_slips').getPublicUrl(fileName);
@@ -277,6 +363,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
 
     if (bookingInsertError) {
       console.error('Error inserting booking data:', bookingInsertError);
+
       fs.unlinkSync(filePath);
       return res.status(500).json({ error: 'Failed to insert booking', details: bookingInsertError.message });
     }
@@ -298,6 +385,13 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
 
     fs.unlinkSync(filePath);
 
+      throw new Error(`Failed to insert booking: ${bookingInsertError.message}`);
+    }
+
+    // ลบไฟล์ชั่วคราว
+    await fs.unlink(imagePath).catch(err => console.error('Failed to delete file:', err));
+
+
     res.status(200).json({
       message: 'Booking confirmed and created successfully',
       booking: bookingInsertData[0],
@@ -306,8 +400,27 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
     });
   } catch (error) {
     console.error('Error in /confirm route:', error.stack);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+
+    if (imagePath && (await fs.stat(imagePath).catch(() => false))) {
+      await fs.unlink(imagePath).catch(err => console.error('Error deleting temporary file:', err));
+    }
+    let statusCode = 500;
+    let errorMessage = 'Internal Server Error';
+    let errorDetails = error.message || 'Unknown error';
+
+    if (error.response) {
+      statusCode = error.response.status;
+      errorMessage = `SlipOK API error: ${error.response.status} - ${error.response.data?.message || 'Unknown'}`;
+      errorDetails = error.response.data || error.message;
+    } else if (error.code === 'ECONNABORTED') {
+      errorMessage = 'SlipOK API connection timed out';
+    }
+
+    res.status(statusCode).json({
+      error: errorMessage,
+      details: errorDetails,
+    });
+
   }
 });
 
