@@ -25,9 +25,7 @@ import cancleRoutesUser from './routespalmmy/cancleroutes.js';
  
 import iceRoutes from './routesice/ice.js';
 import promotionRoutes from './routesmild/PromotionRoutes.js';
- 
- 
- 
+
 const router = express.Router();
  
 router.use("/api", gibRoutes); // ตรวจสอบว่าใช้ /api เป็น prefix
@@ -36,11 +34,13 @@ router.use("/users", dashRouter); // จาก dash.js (statistics, revenue, new
 router.use("/users", userRoutes); // จาก routesJane/users.js (new-users-today)
 router.use("/gib", gibRoutes);
 
+
 router.use('/reportbooking', reportbookRoute);
 router.use('/booking', booking);
 
  
 router.use("/booking", promotionRoutes); // /booking/sports-categories และ /booking/filtered-stadiums
+
 
 router.use('/jane', janeRoutes);
 router.use('/users', userRoutes);  // เพิ่ม route ของ users

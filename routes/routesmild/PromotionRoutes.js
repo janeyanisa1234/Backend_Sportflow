@@ -1,8 +1,10 @@
+
+// /Backend_Sportflow/routes/routesmild/PromotionRoutes.js
 import express from 'express';
-import { getSportsCategories, getFilteredStadiums } from '../../Database/dbmild/sports.js';
- 
+import { getSportsCategories, getFilteredStadiums, getPromotedStadiums } from '../../Database/dbmild/sports.js';
+
 const router = express.Router();
- 
+
 // ดึงประเภทกีฬาทั้งหมด
 router.get('/sports-categories', async (req, res) => {
   console.log('Received request for /booking/sports-categories, params:', req.params, 'query:', req.query);
@@ -15,7 +17,7 @@ router.get('/sports-categories', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch sports categories', details: error.message });
   }
 });
- 
+
 // กรองสนามตามประเภทกีฬา
 router.get('/filtered-stadiums', async (req, res) => {
   console.log('Received request for /booking/filtered-stadiums, params:', req.params, 'query:', req.query);
@@ -32,5 +34,23 @@ router.get('/filtered-stadiums', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch filtered stadiums', details: error.message });
   }
 });
- 
+
+
+// ดึงสนามที่มีโปรโมชัน (promotion_status = "กำลังดำเนินการ")
+router.get('/promoted-stadiums', async (req, res) => {
+  console.log('Received request for /booking/promoted-stadiums, params:', req.params, 'query:', req.query);
+  try {
+    const stadiums = await getPromotedStadiums();
+    console.log('Promoted stadiums:', stadiums);
+    if (!stadiums || stadiums.length === 0) {
+      return res.status(200).json([]); // ส่ง array ว่างถ้าไม่มีข้อมูล
+    }
+    res.json(stadiums);
+  } catch (error) {
+    console.error('Error in /promoted-stadiums:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to fetch promoted stadiums', details: error.message });
+  }
+});
+
+
 export default router;

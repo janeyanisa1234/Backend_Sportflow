@@ -5,8 +5,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import DB from '../../Database/db.js';
+
 import axios from 'axios';
 import FormData from 'form-data';
+
 
 const router = express.Router();
 
@@ -43,15 +45,19 @@ const multerErrorHandler = (err, req, res, next) => {
   next(err);
 };
 
+
 // ข้อมูลที่ต้องตรวจสอบ
 const EXPECTED_ACCOUNT = "ณัฐฐา ";
 const SLIPOK_API_URL = 'https://api.slipok.com/api/line/apikey/40730';
 const SLIPOK_API_KEY = 'SLIPOK41AJXKE';
 
+
 // Get all stadiums
 router.get('/stadiums', async (req, res) => {
   try {
+    console.time('fetchStadiums');
     const stadiumData = await getStadiumsWithCourtsAndTimes();
+    console.timeEnd('fetchStadiums');
     if (!stadiumData || stadiumData.length === 0) {
       return res.status(404).json({ error: 'No stadiums found' });
     }
@@ -110,6 +116,7 @@ router.post('/stadiums', async (req, res) => {
         date_play: date,
         time_slot: timeSlots.join(','),
         totalPrice: parseInt(price),
+        status_timebooking: false, // ตั้งค่าเริ่มต้นเป็น false
       },
     });
   } catch (error) {
@@ -144,7 +151,46 @@ router.get('/:bookingId', async (req, res) => {
   }
 });
 
-// Confirm booking with slip and insert into Booking table (using SlipOK)
+
+router.get('/confirm/booked-slots', async (req, res) => {
+  try {
+    const { stadiumName, date } = req.query;
+    console.log('Received request for booked slots:', { stadiumName, date });
+
+    if (!stadiumName || !date) {
+      return res.status(400).json({ error: 'Missing stadiumName or date' });
+    }
+
+    const { data: stadium, error: stadiumError } = await DB.from('add_stadium')
+      .select('id')
+      .eq('stadium_name', stadiumName)
+      .single();
+
+    if (stadiumError || !stadium) {
+      console.error('Stadium not found:', stadiumError?.message || 'No stadium data');
+      return res.status(404).json({ error: 'Stadium not found' });
+    }
+
+    const { data, error } = await DB.from('Booking')
+      .select('court, time_slot, status_booking, status_timebooking')
+      .eq('id_stadium', stadium.id)
+      .eq('date_play', date);
+
+    if (error) {
+      console.error('Error fetching booked slots from DB:', error.message);
+      return res.status(500).json({ error: 'Database error', details: error.message });
+    }
+
+    console.log('Booked slots data:', data);
+    res.json(data || []);
+  } catch (error) {
+    console.error('Error in /confirm/booked-slots route:', error.stack);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+});
+
+// Confirm booking with slip and insert into Booking table
+
 router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (req, res) => {
   let imagePath;
   try {
@@ -155,8 +201,8 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
     const {
       user_id,
       bookingId,
-      date, // วันที่โอน
-      time, // เวลาที่โอน
+      date,
+      time,
       id_stadium,
       id_court,
       court_number,
@@ -166,7 +212,6 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
     } = req.body;
     const uploadedFile = req.file;
 
-    // ตรวจสอบข้อมูลที่จำเป็น
     if (!uploadedFile) {
       return res.status(400).json({ error: 'No slipImage provided' });
     }
@@ -177,6 +222,32 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
         received: req.body,
       });
     }
+
+    // แปลง time_slot เป็น array เพื่อตรวจสอบการทับซ้อน
+    const requestedSlots = time_slot.split(',');
+
+    // ตรวจสอบการทับซ้อนกับการจองที่มีอยู่
+    const { data: existingBookings, error: existingError } = await DB
+      .from('Booking')
+      .select('time_slot, date_play, court')
+      .eq('id_stadium', id_stadium)
+      .eq('id_court', id_court)
+      .eq('date_play', date_play)
+      .eq('status_timebooking', true);
+
+    if (existingError) {
+      console.error('Error checking existing bookings:', existingError);
+      return res.status(500).json({ error: 'Failed to check existing bookings', details: existingError.message });
+    }
+
+    const existingSlots = existingBookings.flatMap((booking) => booking.time_slot.split(','));
+    const overlappingSlots = requestedSlots.filter((slot) => existingSlots.includes(slot));
+
+    if (overlappingSlots.length > 0) {
+      return res.status(400).json({
+        error: 'Time slot conflict',
+        details: `The following slots are already booked: ${overlappingSlots.join(', ')}`,
+      });
 
     const EXPECTED_AMOUNT = Number(totalPrice).toFixed(2);
     imagePath = uploadedFile.path;
@@ -238,9 +309,9 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
     const toAccountName = slipData.data?.receiver?.displayName || '';
     if (!toAccountName.includes(EXPECTED_ACCOUNT)) {
       throw new Error(`ชื่อบัญชีปลายทาง (${toAccountName || 'ไม่พบ'}) ไม่ตรงกับ "${EXPECTED_ACCOUNT}"`);
+
     }
 
-    // เตรียมข้อมูลสำหรับ insert
     const bookingData = {
       id_booking: bookingId,
       user_id,
@@ -251,15 +322,20 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       time_slot,
       totalPrice: parseInt(totalPrice),
       payment: 'slip',
-      status_booking: 'ยืนยัน',
-      status_timebooking: false,
+      status_booking: 'ยืนยัน', // อัปเดตสถานะเป็น "ยืนยัน"
+      status_timebooking: true, // อัปเดตเป็น true เมื่อการจองสำเร็จ
       SlipPayment: '',
-      date: date || null,
-      time: time || null,
+
+      date: date || new Date().toISOString().split("T")[0],
+      time: time || new Date().toTimeString().split(" ")[0],
     };
+
+
+ 
 
     // อัปโหลดสลิปไปยัง Supabase Storage
     const fileContent = fileBuffer;
+
     const fileName = `${Date.now()}_${path.basename(uploadedFile.filename)}`;
 
     const { data: uploadData, error: uploadError } = await DB.storage
@@ -271,14 +347,15 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
 
     if (uploadError) {
       console.error('Error uploading slip to storage:', uploadError);
+
       throw new Error(`Failed to upload slip image: ${uploadError.message}`);
+
     }
 
     const { data: publicURL } = DB.storage.from('payment_slips').getPublicUrl(fileName);
     const slipImageUrl = publicURL.publicUrl;
     bookingData.SlipPayment = slipImageUrl;
 
-    // Insert ข้อมูลลงในตาราง Booking
     const { data: bookingInsertData, error: bookingInsertError } = await DB
       .from('Booking')
       .insert([bookingData])
@@ -286,19 +363,44 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
 
     if (bookingInsertError) {
       console.error('Error inserting booking data:', bookingInsertError);
+
+      fs.unlinkSync(filePath);
+      return res.status(500).json({ error: 'Failed to insert booking', details: bookingInsertError.message });
+    }
+
+    // ดึง Time Slot ที่จองแล้วทั้งหมดสำหรับวันที่นั้น
+    const { data: bookedSlotsData, error: slotsError } = await DB
+      .from('Booking')
+      .select('time_slot, date_play, court')
+      .eq('id_stadium', id_stadium)
+      .eq('id_court', id_court)
+      .eq('date_play', date_play)
+      .eq('status_timebooking', true);
+
+    if (slotsError) {
+      console.error('Error fetching booked slots:', slotsError);
+    }
+
+    const bookedSlots = bookedSlotsData ? bookedSlotsData.map((slot) => slot.time_slot.split(',')).flat() : [];
+
+    fs.unlinkSync(filePath);
+
       throw new Error(`Failed to insert booking: ${bookingInsertError.message}`);
     }
 
     // ลบไฟล์ชั่วคราว
     await fs.unlink(imagePath).catch(err => console.error('Failed to delete file:', err));
 
+
     res.status(200).json({
       message: 'Booking confirmed and created successfully',
       booking: bookingInsertData[0],
       slipImage: slipImageUrl,
+      bookedSlots, // ส่ง Time Slot ที่จองแล้วกลับไป
     });
   } catch (error) {
     console.error('Error in /confirm route:', error.stack);
+
     if (imagePath && (await fs.stat(imagePath).catch(() => false))) {
       await fs.unlink(imagePath).catch(err => console.error('Error deleting temporary file:', err));
     }
@@ -318,6 +420,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       error: errorMessage,
       details: errorDetails,
     });
+
   }
 });
 
