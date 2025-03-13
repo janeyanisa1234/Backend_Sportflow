@@ -1,3 +1,4 @@
+// /Backend_Sportflow/Database/dbmild/booking.js
 import DB from '../db.js';
 
 function splitTimeIntoIntervals(timeStart, timeEnd) {
@@ -55,8 +56,9 @@ async function getStadiumsWithCourtsAndTimes(stadiumId = null) {
     if (timeError) throw new Error(`Time fetch error: ${timeError.message}`);
 
     const { data: promotions, error: promoError } = await DB.from('sports_promotions')
-      .select('owner_id, discount_percentage')
-      .in('owner_id', ownerIds);
+      .select('owner_id, discount_percentage, promotion_status') // เพิ่ม promotion_status
+      .in('owner_id', ownerIds)
+      .eq('promotion_status', 'กำลังดำเนินการ'); // กรองเฉพาะโปรโมชันที่กำลังดำเนินการ
 
     if (promoError) throw new Error(`Promotion fetch error: ${promoError.message}`);
 

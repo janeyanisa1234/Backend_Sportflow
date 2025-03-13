@@ -22,8 +22,7 @@ import historyRoutes from './routespalmmy/booking_history.js';
 import cancleRoutesUser from './routespalmmy/cancleroutes.js';
 
 import iceRoutes from './routesice/ice.js';
-
-
+import promotionRoutes from './routesmild/PromotionRoutes.js';
 
 
 
@@ -35,7 +34,8 @@ router.use("/users", dashRouter); // จาก dash.js (statistics, revenue, new
 router.use("/users", userRoutes); // จาก routesJane/users.js (new-users-today)
 router.use("/gib", gibRoutes);
 
-router.use('/booking', booking);
+router.use("/booking", promotionRoutes); // /booking/sports-categories และ /booking/filtered-stadiums
+router.use("/booking", booking);
 router.use('/jane', janeRoutes);
 router.use('/users', userRoutes);  // เพิ่ม route ของ users
 router.use('/kong', kongRoutes);
