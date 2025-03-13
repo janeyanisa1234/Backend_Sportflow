@@ -7,11 +7,6 @@ import DB from '../../Database/db.js';
 
 const router = express.Router();
 
-// เส้นทางทดสอบ
-router.get('/', (req, res) => {
-  res.send("test test"); // ส่งข้อความทดสอบเพื่อเช็คว่า Router ทำงาน
-});
-
 // ตั้งค่า Multer สำหรับอัปโหลดรูปภาพคอร์ท
 const fieldImageStorage = multer.diskStorage({
   destination: (req, file, cb) => {

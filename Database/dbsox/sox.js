@@ -1,25 +1,28 @@
 import DB from '../db.js';
 
+// ฟังก์ชันเพิ่มข้อมูลสนามกีฬาลงในฐานข้อมูล
 const addStadium = async (stadiumData) => {
   try {
-    console.log("Adding stadium with data:", stadiumData);
-    
     let ownerIdToUse = stadiumData.owner_id;
+    // ถ้าไม่มี owner_id แต่มี user_id ให้ดึง owner_id จาก user_id
     if (!ownerIdToUse && stadiumData.user_id) {
       const { ownerId } = await getOwnerIdByUserId(stadiumData.user_id);
       ownerIdToUse = ownerId;
     }
     
+    // ตรวจสอบว่ามี owner_id หรือไม่ ถ้าไม่มีให้โยน error
     if (!ownerIdToUse) {
       throw new Error('Owner ID is required to add a stadium');
     }
     
+    // ตรวจสอบว่ามีชื่อสนามและที่อยู่หรือไม่ ถ้าไม่มีให้โยน error
     if (!stadiumData.stadium_name || !stadiumData.stadium_address) {
       throw new Error('Stadium name and address are required');
     }
     
     const dateAdd = new Date().toISOString();
 
+    // เพิ่มข้อมูลสนามลงในตาราง 'add_stadium' ด้วยสถานะ 'รออนุมัติ'
     const { data, error } = await DB
       .from('add_stadium')
       .insert([{ 
@@ -27,33 +30,30 @@ const addStadium = async (stadiumData) => {
         stadium_name: stadiumData.stadium_name,
         stadium_address: stadiumData.stadium_address,
         stadium_image: stadiumData.stadium_image || null,
-        stadium_status: 'รออนุมัติ',
+        stadium_status: 'รออนุมัติ', 
         date_add: dateAdd
       }])
       .select();
     
     if (error) {
-      console.error("Database insert error:", error);
       throw new Error(`Failed to insert stadium: ${error.message}`);
     }
     
-    console.log("Stadium added successfully:", data);
     return { data };
   } catch (err) {
-    console.error("Error in addStadium:", err);
     throw new Error('Failed to add stadium: ' + err.message);
   }
 };
 
+// ฟังก์ชันลบข้อมูลสนามกีฬาออกจากฐานข้อมูล
 const deleteStadium = async (stadiumId) => {
   try {
-    console.log(`Deleting stadium with ID: ${stadiumId}`);
-    console.log("Stadium ID type and value:", typeof stadiumId, stadiumId);
-    
+    // ตรวจสอบว่ามี stadiumId หรือไม่ ถ้าไม่มีให้โยน error
     if (!stadiumId) {
       throw new Error('Stadium ID is required to delete a stadium');
     }
     
+    // ตรวจสอบว่ามีสนามนี้อยู่ในฐานข้อมูลหรือไม่
     const { data: existingStadium, error: fetchError } = await DB
       .from('add_stadium')
       .select('*')
@@ -61,75 +61,62 @@ const deleteStadium = async (stadiumId) => {
       .single();
     
     if (fetchError) {
-      console.error("Error checking stadium existence:", fetchError);
       throw new Error(`Failed to check stadium existence: ${fetchError.message}`);
     }
     
     if (!existingStadium) {
-      console.error(`Stadium with ID ${stadiumId} not found in the database during existence check`);
       throw new Error('No stadium found with the given ID');
     }
     
-    console.log("Found stadium before deletion:", existingStadium);
-    
-    // Delete related courts first
+    // ลบข้อมูลคอร์ทที่เกี่ยวข้องกับสนามนี้ก่อน
     const { error: courtDeleteError } = await DB
       .from('add_court')
       .delete()
       .eq('stadium_id', stadiumId);
     
     if (courtDeleteError) {
-      console.error("Error deleting related courts:", courtDeleteError);
       throw new Error(`Failed to delete related courts: ${courtDeleteError.message}`);
     }
     
-    // Perform the stadium delete operation
-    const { data, error, count } = await DB
+    // ลบข้อมูลสนาม
+    const { data, error } = await DB
       .from('add_stadium')
       .delete()
       .eq('id', stadiumId)
       .select();
     
-    console.log("Delete operation result:", { data, error, count });
-    
     if (error) {
-      console.error("Database delete error:", error);
       throw new Error(`Failed to delete stadium: ${error.message}`);
     }
     
     if (!data || data.length === 0) {
-      console.error(`Delete operation returned no data for stadium ID ${stadiumId}`);
       throw new Error('No stadium found with the given ID or deletion failed');
     }
     
-    console.log("Stadium deleted successfully:", data);
     return { data };
   } catch (err) {
-    console.error("Error in deleteStadium:", err);
     throw new Error('Failed to delete stadium: ' + err.message);
   }
 };
 
+// ฟังก์ชันดึงข้อมูลสนามทั้งหมดตาม owner_id
 const getStadiumsByOwnerId = async (ownerId) => {
   try {
-    console.log(`Fetching stadiums for owner ID: ${ownerId}`);
-    
+    // ดึงข้อมูลสนามทั้งหมดที่ owner_id นี้เป็นเจ้าของ
     const { data: stadiums, error: stadiumError } = await DB
       .from('add_stadium')
       .select('*')
       .eq('owner_id', ownerId);
     
     if (stadiumError) {
-      console.error('Error fetching stadiums:', stadiumError);
       return { data: [], error: 'Failed to fetch stadiums' };
     }
-    
-    console.log(`Found ${stadiums?.length || 0} stadiums for owner ID ${ownerId}`);
     
     if (!stadiums || stadiums.length === 0) {
       return { data: [], error: null };
     }
 
+    // ดึงข้อมูลคอร์ทที่เกี่ยวข้องกับสนามทั้งหมด
     const stadiumIds = stadiums.map(stadium => stadium.id);
     const { data: courts, error: courtError } = await DB
       .from('add_court')
@@ -137,22 +124,19 @@ const getStadiumsByOwnerId = async (ownerId) => {
       .in('stadium_id', stadiumIds);
 
     if (courtError) {
-      console.error("Error fetching courts:", courtError);
       return { data: stadiums, error: courtError };
     }
 
+    // จัดกลุ่มประเภทกีฬาและจำนวนคอร์ทตาม stadium_id
     const sportsTypesByStadium = courts.reduce((acc, court) => {
       const { stadium_id, court_type, court_quantity } = court;
-      if (!acc[stadium_id]) {
-        acc[stadium_id] = {};
-      }
-      if (!acc[stadium_id][court_type]) {
-        acc[stadium_id][court_type] = 0;
-      }
+      if (!acc[stadium_id]) acc[stadium_id] = {};
+      if (!acc[stadium_id][court_type]) acc[stadium_id][court_type] = 0;
       acc[stadium_id][court_type] += parseInt(court_quantity || 0, 10);
       return acc;
     }, {});
 
+    // เพิ่มข้อมูลประเภทกีฬาให้กับข้อมูลสนาม
     const enrichedStadiums = stadiums.map(stadium => {
       const sportsTypes = sportsTypesByStadium[stadium.id] || {};
       const sportsArray = Object.entries(sportsTypes).map(([name, count]) => ({
@@ -167,31 +151,28 @@ const getStadiumsByOwnerId = async (ownerId) => {
 
     return { data: enrichedStadiums, error: null };
   } catch (err) {
-    console.error('Error in getStadiumsByOwnerId:', err);
     return { data: [], error: err.message || 'An unexpected error occurred' };
   }
 };
 
+// ฟังก์ชันดึง owner_id จาก user_id
 const getOwnerIdByUserId = async (userId) => {
   try {
-    console.log(`Looking up owner ID for user ID: ${userId}`);
-    
     if (!userId) {
-      console.error("getOwnerIdByUserId called with null/undefined userId");
       return { ownerId: null, error: "User ID is required" };
     }
     
     let parsedUserId = userId;
+    // จัดการกรณี userId เป็น JSON string
     try {
       if (typeof userId === 'string' && (userId.startsWith('{') || userId.startsWith('['))) {
         const parsed = JSON.parse(userId);
         parsedUserId = parsed.id || parsed.user_id || parsed.userId || parsed;
-        console.log(`Parsed user ID from JSON string: ${parsedUserId}`);
       }
     } catch (parseError) {
-      console.log("userId is not a JSON string, continuing with original value");
     }
     
+    // ดึงข้อมูล owner จากตาราง 'owners' โดยใช้ user_id
     const { data, error } = await DB
       .from('owners')
       .select('*')
@@ -200,25 +181,19 @@ const getOwnerIdByUserId = async (userId) => {
     
     if (error) {
       if (error.code === 'PGRST116') {
-        console.log(`No owner found for user ID: ${parsedUserId}`);
         return { ownerId: null, error: `No owner found for user ID: ${parsedUserId}` };
       }
-      
-      console.error('Database error when fetching owner ID:', error);
       return { ownerId: null, error: error.message || 'Database error' };
     }
     
     if (!data) {
-      console.log(`No owner record found for user ID: ${parsedUserId}`);
       return { ownerId: null, error: 'No owner found for the given user ID' };
     }
     
     const ownerId = data.id || data.owner_id || data.user_id;
     
-    console.log(`Found owner record for user ID: ${parsedUserId} with owner ID: ${ownerId}`);
     return { ownerId, error: null };
   } catch (err) {
-    console.error('Error in getOwnerIdByUserId:', err);
     return { ownerId: null, error: err.message || 'Failed to retrieve owner ID' };
   }
 };
