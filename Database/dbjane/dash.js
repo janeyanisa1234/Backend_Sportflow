@@ -356,4 +356,5 @@ async function getNewUsersTrend(month, year) {
       res.status(500).json({ error: "Failed to fetch booking summary", details: error.message });
     }
   });
+
 export default router;
