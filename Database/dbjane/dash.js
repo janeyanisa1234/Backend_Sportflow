@@ -283,33 +283,52 @@ async function getNewUsersTrend(month, year) {
     }
   }
   
-  // ดึงข้อมูลแนวโน้มรายได้ (7 วันล่าสุด)
-  async function getRevenueTrend(month, year) {
+  
+  
+  async function getBookingSummary(month, year) {
     try {
-      const today = new Date();
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 6);
-  
-      const { data, error } = await supabase
-        .from("cashbooking")
-        .select("totalcash, date")
-        .gte("date", sevenDaysAgo.toISOString().split("T")[0])
-        .lte("date", today.toISOString().split("T")[0]);
-  
-      if (error) throw new Error("Error fetching revenue: " + error.message);
-  
-      const trendData = [];
-      for (let d = new Date(sevenDaysAgo); d <= today; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split("T")[0];
-        const dailyRevenue = data
-          .filter((item) => item.date === dateStr)
-          .reduce((sum, item) => sum + (item.totalcash || 0), 0);
-        trendData.push({ date: dateStr, netRevenue: dailyRevenue * 0.9 }); // คำนวณสุทธิ (90%)
+      console.log("Fetching booking summary with filters:", { month, year });
+      const { data, error } = await supabase.from("Booking").select("date, status_booking");
+      if (error) {
+        console.error("Booking fetch error:", error);
+        throw new Error("Error fetching booking summary: " + error.message);
+      }
+      if (!data || data.length === 0) {
+        console.log("No data found in Booking table");
+        return {
+          confirmed: 0,
+          cancelled: 0,
+          pendingCancel: 0,
+          totalBookings: 0,
+        };
       }
   
-      return trendData;
+      console.log("Raw booking data:", data);
+  
+      const filteredData = data.filter((item) => {
+        const bookingDate = new Date(item.date);
+        const monthNum = bookingDate.getMonth() + 1;
+        const yearNum = bookingDate.getFullYear();
+        return (!month || monthNum === parseInt(month)) && (!year || yearNum === parseInt(year));
+      });
+  
+      console.log("Filtered booking data:", filteredData);
+  
+      const confirmed = filteredData.filter(item => item.status_booking === "ยืนยัน").length;
+      const cancelled = filteredData.filter(item => item.status_booking === "ยกเลิกแล้ว").length;
+      const pendingCancel = filteredData.filter(item => item.status_booking === "รอดำเนินการยกเลิก").length;
+      const totalBookings = confirmed + cancelled + pendingCancel;
+  
+      console.log("Booking summary counts:", { confirmed, cancelled, pendingCancel, totalBookings });
+  
+      return {
+        confirmed,
+        cancelled,
+        pendingCancel,
+        totalBookings,
+      };
     } catch (error) {
-      console.error("Error in getRevenueTrend:", error);
+      console.error("Error in getBookingSummary:", error);
       throw error;
     }
   }
@@ -325,13 +344,16 @@ async function getNewUsersTrend(month, year) {
     }
   });
   
-  router.get("/revenue-trend", async (req, res) => {
+
+
+  router.get("/booking-summary", async (req, res) => {
     const { month, year } = req.query;
     try {
-      const trend = await getRevenueTrend(month, year);
-      res.json(trend);
+      const summary = await getBookingSummary(month, year);
+      res.json(summary);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch revenue trend", details: error.message });
+      console.error("Route /booking-summary error:", error.message);
+      res.status(500).json({ error: "Failed to fetch booking summary", details: error.message });
     }
   });
 export default router;

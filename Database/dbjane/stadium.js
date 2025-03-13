@@ -4,7 +4,8 @@ async function getAllStadiumRequests() {
     try {
         const { data: stadiums, error: stadiumError } = await DB
             .from('add_stadium')
-            .select('*');
+            .select('*')
+            .order('date_add', { ascending: false }); // เปลี่ยนจาก created_at เป็น date_add
 
         if (stadiumError) throw stadiumError;
 
@@ -14,18 +15,20 @@ async function getAllStadiumRequests() {
 
         if (userError) throw userError;
 
-        //กรณีที่มีข้อมูลเป็นในกรณีที่ข้อมูล database บางส่วนเป็น NULL
         const validStadiums = stadiums.filter(stadium => {
-           
             return stadium.owner_id != null && stadium.stadium_status != null;
         });
 
-        
         const result = validStadiums.map(stadium => {
             const owner = users.find(user => user.id === stadium.owner_id);
             return {
-                ...stadium,
-                owner_name: owner ? owner.name : null
+                id: stadium.id,
+                owner_name: owner ? owner.name : null,
+                stadium_name: stadium.stadium_name,
+                stadium_image: stadium.stadium_image,
+                stadium_address: stadium.stadium_address,
+                stadium_status: stadium.stadium_status,
+                date_add: stadium.date_add // เปลี่ยนจาก created_at เป็น date_add
             };
         });
 

@@ -5,7 +5,8 @@ async function getAllUsers() {
     try {
         const { data: users, error: usersError } = await DB
             .from('users')
-            .select('*');
+            .select('*')
+            .order('created_at', { ascending: false }); // เรียงจากล่าสุดไปเก่าสุด
 
         const { data: owners, error: ownersError } = await DB
             .from('owners')
@@ -53,9 +54,7 @@ async function checkUserExists(userId) {
             .select('*')
             .eq('id', userId);
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         return { exists: data.length > 0, error: null };
     } catch (error) {
@@ -69,7 +68,8 @@ async function getRegularUsers() {
     try {
         const { data: users, error: usersError } = await DB
             .from('users')
-            .select('*');
+            .select('*')
+            .order('created_at', { ascending: false }); // เรียงจากล่าสุดไปเก่าสุด
 
         const { data: owners, error: ownersError } = await DB
             .from('owners')
@@ -93,13 +93,13 @@ async function getRegularUsers() {
     }
 }
 
-
 // ฟังก์ชันดึงข้อมูลผู้ประกอบการ
 async function getOwnerUsers() {
     try {
         const { data: users, error: usersError } = await DB
             .from('users')
-            .select('*');
+            .select('*')
+            .order('created_at', { ascending: false }); // เรียงจากล่าสุดไปเก่าสุด
 
         const { data: owners, error: ownersError } = await DB
             .from('owners')
@@ -131,45 +131,6 @@ async function getOwnerUsers() {
 // ฟังก์ชันลบผู้ใช้
 async function deleteUser(userId) {
     try {
-        // Start a transaction to ensure all operations succeed or fail together
-        // First, delete related records from all tables that reference users.id
-        
-        // Check and delete from owners table
-        const { data: ownerData, error: ownerError } = await DB
-            .from('owners')
-            .select('*')
-            .eq('user_id', userId);
-
-        if (ownerError) throw ownerError;
-
-        if (ownerData && ownerData.length > 0) {
-            const { error: deleteOwnerError } = await DB
-                .from('owners')
-                .delete()
-                .eq('user_id', userId);
-
-            if (deleteOwnerError) throw deleteOwnerError;
-        }
-        
-        // Delete from cancle table
-        const { error: deleteCancleError } = await DB
-            .from('cancle')
-            .delete()
-            .eq('id', userId);
-            
-        if (deleteCancleError && !deleteCancleError.message.includes('not found')) {
-            throw deleteCancleError;
-        }
-        
-        // Add other tables that reference users.id here
-        // Example:
-        // const { error: deleteBookingsError } = await DB
-        //     .from('bookings')
-        //     .delete()
-        //     .eq('user_id', userId);
-        // if (deleteBookingsError) throw deleteBookingsError;
-        
-        // Finally delete from users table
         const { data, error } = await DB
             .from('users')
             .delete()
@@ -203,7 +164,6 @@ async function countUsers() {
     }
 }
 
-
 // ฟังก์ชันนับจำนวนผู้ประกอบการ
 async function countOwnerUsers() {
     try {
@@ -215,15 +175,8 @@ async function countOwnerUsers() {
             .from('owners')
             .select('*');
 
-        if (usersError) {
-            console.error("ข้อผิดพลาดในการดึงข้อมูลผู้ใช้: ", usersError);
-            throw usersError;
-        }
-        
-        if (ownersError) {
-            console.error("ข้อผิดพลาดในการดึงข้อมูลผู้ประกอบการ: ", ownersError);
-            throw ownersError;
-        }
+        if (usersError) throw usersError;
+        if (ownersError) throw ownersError;
 
         const ownerUsers = users.filter(user => 
             owners.some(owner => owner.user_id === user.id)
@@ -247,17 +200,9 @@ async function countRegularUsers() {
             .from('owners')
             .select('*');
 
-        if (usersError) {
-            console.error("ข้อผิดพลาดในการดึงข้อมูลผู้ใช้: ", usersError);
-            throw usersError;
-        }
-        
-        if (ownersError) {
-            console.error("ข้อผิดพลาดในการดึงข้อมูลผู้ประกอบการ: ", ownersError);
-            throw ownersError;
-        }
+        if (usersError) throw usersError;
+        if (ownersError) throw ownersError;
 
-        // กรองเฉพาะผู้ใช้ที่ไม่ใช่ผู้ประกอบการ
         const regularUsers = users.filter(user => 
             !owners.some(owner => owner.user_id === user.id)
         );
@@ -269,12 +214,10 @@ async function countRegularUsers() {
     }
 }
 
-
-
 // ฟังก์ชันดึงข้อมูลผู้ใช้ใหม่วันนี้
 async function getNewUsersToday() {
     try {
-        const today = new Date().toISOString().split('T')[0]; // ได้วันที่ปัจจุบันในรูปแบบ YYYY-MM-DD
+        const today = new Date().toISOString().split('T')[0];
         const { data: users, error: usersError } = await DB
             .from('users')
             .select('*')

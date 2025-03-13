@@ -49,9 +49,10 @@ router.use('/cash', cashRoutes);  // เพิ่มเส้นทางให�
 router.use('/', paymentRoutes);
 
 router.use('/history', historyRoutes);
-router.use('/', cancleRoutes);
+router.use('/cancleAdmin', cancleRoutes);
 
 router.use("/cancle", cancleRoutesUser);
+
 router.use('/', paymentQR);
 router.use('/ice',iceRoutes);
 
