@@ -1,52 +1,69 @@
-import express from 'express';
-import { getSportsCategories, getFilteredStadiums, getPromotedStadiums } from '../../Database/dbmild/sports.js';
- 
+import express from "express";
+import DB from "../../Database/db.js";
+
 const router = express.Router();
- 
-// ดึงประเภทกีฬาทั้งหมด
-router.get('/sports-categories', async (req, res) => {
-  console.log('Received request for /booking/sports-categories, params:', req.params, 'query:', req.query);
+
+router.get("/", async (req, res) => {
   try {
-    const categories = await getSportsCategories();
-    console.log('Sports categories:', categories);
-    res.json(categories);
-  } catch (error) {
-    console.error('Error in /sports-categories:', error.message, error.stack);
-    res.status(500).json({ error: 'Failed to fetch sports categories', details: error.message });
-  }
-});
- 
-// กรองสนามตามประเภทกีฬา
-router.get('/filtered-stadiums', async (req, res) => {
-  console.log('Received request for /booking/filtered-stadiums, params:', req.params, 'query:', req.query);
-  try {
-    const { sportType } = req.query;
-    if (!sportType) {
-      return res.status(400).json({ error: 'sportType is required' });
+    const userId = req.query.user_id;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing user_id parameter" });
     }
-    const stadiums = await getFilteredStadiums(sportType);
-    console.log('Filtered stadiums:', stadiums);
-    res.json(stadiums);
-  } catch (error) {
-    console.error('Error in /filtered-stadiums:', error.message, error.stack);
-    res.status(500).json({ error: 'Failed to fetch filtered stadiums', details: error.message });
-  }
-});
- 
- 
-// ดึงสนามที่มีโปรโมชัน (promotion_status = "กำลังดำเนินการ")
-router.get('/promoted-stadiums', async (req, res) => {
-  try {
-    const stadiums = await getPromotedStadiums();
-    if (!stadiums || stadiums.length === 0) {
+
+    console.log(`Fetching bookings for user_id: ${userId}`);
+
+    const query = DB.from("Booking")
+      .select(
+        `
+        id_booking,
+        court,
+        date_play,
+        time_slot,
+        totalPrice,
+        date,
+        time,
+        status_booking,
+        stadiums:id_stadium (stadium_name),
+        courts:id_court (court_type)
+        `
+      )
+      .eq("user_id", userId)
+      .order("date_play", { ascending: false }); // เรียงจากล่าสุดไปเก่าสุด
+
+    console.log("Generated Query:", query);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Database Error:", error);
+      return res.status(500).json({ error: "Error fetching booking data", details: error.message });
+    }
+
+    if (!data || data.length === 0) {
+      console.log("No bookings found.");
       return res.status(200).json([]);
     }
-    res.json(stadiums);
+
+    console.log("Fetched Data:", data);
+
+    const formattedBookings = data.map((booking) => ({
+      id_booking: booking.id_booking,
+      Stadium_name: booking.stadiums?.stadium_name,
+      Sports_type: booking.courts?.court_type,
+      Court: booking.court,
+      date_play: booking.date_play,
+      time_slot: booking.time_slot,
+      totalPrice: booking.totalPrice,
+      date: booking.date,
+      Time: booking.time,
+      status_booking: booking.status_booking,
+    }));
+
+    res.json(formattedBookings);
   } catch (error) {
-    console.error('Error in /promoted-stadiums:', error.message, error.stack);
-    res.status(500).json({ error: 'Failed to fetch promoted stadiums', details: error.message });
+    console.error("Server Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
- 
- 
+
 export default router;
