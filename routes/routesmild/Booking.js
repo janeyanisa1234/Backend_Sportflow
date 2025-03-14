@@ -302,7 +302,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       throw new Error(`สลิปไม่ถูกต้องหรือตรวจสอบไม่สำเร็จ: ${slipData?.message || 'Unknown error'}`);
     }
 
-    // ตรวจสอบจำนวนเงินจาก slipData.data.amount
+    //ตรวจสอบจำนวนเงินจาก slipData.data.amount
     const receivedAmount = slipData.data?.amount ? String(slipData.data.amount.toFixed(2)) : null;
     if (!receivedAmount || receivedAmount !== EXPECTED_AMOUNT) {
       throw new Error(`จำนวนเงินในสลิป (${receivedAmount || 'ไม่พบ'}) ไม่ตรงกับที่คาดหวัง (${EXPECTED_AMOUNT})`);
