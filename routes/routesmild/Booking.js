@@ -308,7 +308,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       throw new Error(`จำนวนเงินในสลิป (${receivedAmount || 'ไม่พบ'}) ไม่ตรงกับที่คาดหวัง (${EXPECTED_AMOUNT})`);
     }
 
-    // ตรวจสอบชื่อบัญชีปลายทางจาก slipData.data.receiver.displayName
+    //ตรวจสอบชื่อบัญชีปลายทางจาก slipData.data.receiver.displayName
     const toAccountName = slipData.data?.receiver?.displayName || '';
     if (!toAccountName.includes(EXPECTED_ACCOUNT)) {
       throw new Error(`ชื่อบัญชีปลายทาง (${toAccountName || 'ไม่พบ'}) ไม่ตรงกับ "${EXPECTED_ACCOUNT}"`);
@@ -331,7 +331,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       time: time || new Date().toTimeString().split(" ")[0],
     };
 
-    // อัปโหลดสลิปไปยัง Supabase Storage
+    //อัปโหลดสลิปไปยัง Supabase Storage
     const fileContent = fileBuffer;
     const fileName = `${Date.now()}_${path.basename(uploadedFile.originalname)}`;
 
