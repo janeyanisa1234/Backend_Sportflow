@@ -27,14 +27,14 @@ const getFirstDayOfPreviousMonth = () => {
 
 // ฟังก์ชั่นในการดึงยอดรวมสำหรับแต่ละสนามในเดือนที่ผ่านมา
 export const generateMonthlyCash = async () => {
-    const lastDayOfPreviousMonth = getLastDayOfPreviousMonth();
+    const lastDayOfPreviousMonth = getLastDayOfPreviousMonth(); //วันสุดท้าย
     const firstDayOfPreviousMonth = getFirstDayOfPreviousMonth(); // วันที่ 1 ของเดือนที่ผ่านมา
 
     try {
         // ขั้นตอนที่ 1: ดึงข้อมูลจากตาราง Booking โดยกรองเฉพาะ status_booking = "ยืนยัน"
         const { data: bookings, error: bookingError } = await DB
             .from('Booking')
-            .select('id_stadium, totalPrice, status_booking, date')  // แก้ไขจาก 'booking_date' เป็น 'date'
+            .select('id_stadium, totalPrice, status_booking, date')  
             .gte('date', firstDayOfPreviousMonth.toISOString())  // กรองตั้งแต่วันที่ 1 ของเดือนที่ผ่านมา
             .lte('date', lastDayOfPreviousMonth.toISOString())   // กรองถึงวันที่สุดท้ายของเดือนที่ผ่านมา
             .eq('status_booking', 'ยืนยัน');  // เฉพาะการจองที่ยืนยันแล้ว
