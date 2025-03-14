@@ -323,7 +323,7 @@ router.post('/confirm', upload.single('slipImage'), multerErrorHandler, async (r
       date_play,
       time_slot,
       totalPrice: parseInt(totalPrice),
-      payment: 'slip',
+      payment: 'โอนแล้ว',
       status_booking: 'ยืนยัน',
       status_timebooking: true,
       SlipPayment: '',
