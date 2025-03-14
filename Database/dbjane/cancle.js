@@ -2,7 +2,7 @@ import DB from '../db.js';
 
 export async function getBookingData() {
   try {
-    const { data: bookings, error: bookingError } = await DB
+    const { data: bookings, error: bookingError } = await DB //ดึงข้อมูลจากตารางมาเก็บที่ตัวแปล
       .from('Booking')
       .select(` 
         id_booking,
@@ -81,6 +81,7 @@ export async function getBookingData() {
       return acc;
     }, {});
 
+    //หลังจากกรอกหลักฐานการโอนเงินจะทำการดึงข้อมูลออกมา
     const cancelledBookingIds = bookings
       .filter(booking => booking.status_booking === 'ยกเลิกแล้ว')
       .map(booking => booking.id_booking);
